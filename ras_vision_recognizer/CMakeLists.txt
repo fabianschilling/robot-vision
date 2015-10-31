@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8.3)
+project(ras_vision_recognizer)
+find_package(catkin REQUIRED COMPONENTS rospy sensor_msgs)
+find_package(OpenCV REQUIRED)
+catkin_package()
