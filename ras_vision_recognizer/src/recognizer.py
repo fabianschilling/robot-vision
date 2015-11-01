@@ -25,24 +25,35 @@ class Recognizer:
 
 		self.bridge = CvBridge()
 
-		cv2.namedWindow('color')
-		cv2.createTrackbar('Threshold', 'color', 100, 255, self.nothing)
+		cv2.namedWindow('original', cv2.WINDOW_NORMAL)
 
-		cv2.namedWindow('edges')
+		cv2.namedWindow('processed', cv2.WINDOW_NORMAL)
+		#cv2.createTrackbar('dilation', 'processed', 0, 10, self.nothing)
+		#cv2.createTrackbar('erosion', 'processed', 0, 10, self.nothing)
+		cv2.createTrackbar('blur', 'processed', 3, 10, self.nothing)
+
+		cv2.namedWindow('thresh', cv2.WINDOW_NORMAL)
+		cv2.createTrackbar('hue_min', 'thresh', 0, 179, self.nothing)
+		cv2.createTrackbar('hue_max', 'thresh', 179, 179, self.nothing)
+		cv2.createTrackbar('sat_min', 'thresh', 100, 255, self.nothing)
+		cv2.createTrackbar('sat_max', 'thresh', 255, 255, self.nothing)
+		cv2.createTrackbar('val_min', 'thresh', 100, 255, self.nothing)
+		cv2.createTrackbar('val_max', 'thresh', 255, 255, self.nothing)
 		
-		#cv2.namedWindow('depth')
+		cv2.namedWindow('mask', cv2.WINDOW_NORMAL)
+		cv2.createTrackbar('dilation', 'mask', 50, 100, self.nothing)
+		cv2.createTrackbar('erosion', 'mask', 10, 100, self.nothing)
 
-		cv2.namedWindow('hsv')
-		cv2.createTrackbar('Hue Min', 'hsv', 0, 179, self.nothing)
-		cv2.createTrackbar('Hue Max', 'hsv', 179, 179, self.nothing)
-		cv2.createTrackbar('Sat Min', 'hsv', 100, 255, self.nothing)
-		cv2.createTrackbar('Sat Max', 'hsv', 255, 255, self.nothing)
-		cv2.createTrackbar('Val Min', 'hsv', 150, 255, self.nothing)
-		cv2.createTrackbar('Val Max', 'hsv', 255, 255, self.nothing)
+		cv2.namedWindow('object', cv2.WINDOW_NORMAL)
+		cv2.createTrackbar('blur', 'object', 3, 10, self.nothing)
+
+		cv2.namedWindow('edges', cv2.WINDOW_NORMAL)
+		cv2.createTrackbar('threshold1', 'edges', 100, 1000, self.nothing)
+		cv2.createTrackbar('threshold2', 'edges', 200, 1000, self.nothing)
 
 		# OpenCV variables
 
-		self.scale = 1.0
+		self.scale = 0.5
 
 	def nothing(self, x):
 		pass
@@ -65,25 +76,65 @@ class Recognizer:
 		cv2.waitKey(1)
 
 
-	def color_callback(self, data):
+	def process_original_image(self, image):
+
+		blur = cv2.getTrackbarPos('blur', 'processed')
+
+		if blur > 0:
+			# Blur image
+			image = cv2.blur(image, (blur, blur))
+			#image = cv2.medianBlur(image, (blur, blur))
+			#image = cv2.GaussianBlur(image, (blur, blur), 1)
+
+		#erosion = cv2.getTrackbarPos('erosion', 'processed')
+
+		#if erosion > 0:
+			# Erode
+		#	image = cv2.erode(image, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (erosion, erosion)))
+
+		#dilation = cv2.getTrackbarPos('dilation', 'processed')
+
+		#if dilation > 0:
+			# Dilate
+		#	image = cv2.dilate(image, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dilation, dilation)))
+
+		return image
+
+	def process_mask(self, mask):
+
+		erosion = cv2.getTrackbarPos('erosion', 'mask')
+
+		if erosion > 0:
+			# Erode
+			mask = cv2.erode(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (erosion, erosion)))
+
+		dilation = cv2.getTrackbarPos('dilation', 'mask')
+
+		if dilation > 0:
+			# Dilate
+			mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dilation, dilation)))
+
+		return mask
+
+	def color_callback(self, message):
 
 		# Convert from ROS image to OpenCV image
-		original = self.bridge.imgmsg_to_cv2(data, 'bgr8')
+		original = self.bridge.imgmsg_to_cv2(message, 'bgr8')
 
 		# Scale image down
 		original = cv2.resize(original, (0, 0), fx=self.scale, fy=self.scale)
 
-		# Blur image
-		#blurred_image = cv2.blur(image, (5, 5))
-		image = cv2.GaussianBlur(original, (5, 5), 1)
+		# Process image
+		image = self.process_original_image(original)
+		cv2.imshow('processed', image)
 
-		# Do color tracking
-		res, mask = self.color_tracking(image)
+		# Do color thresholding
+		thresh, mask = self.color_threshold(image)
+		cv2.imshow('thresh', thresh)
 
-		# Erode & dilate
-		image = cv2.erode(image, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
-
-		image = cv2.dilate(image, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+		# Process mask
+		mask = self.process_mask(mask)
+		cv2.imshow('mask', mask)
 
 		# Get image keypoints and draw them
 		#keypoints = self.detect_blobs(mask)
@@ -102,9 +153,12 @@ class Recognizer:
 		# Get contours
 		contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
+		#for i, contour in enumerate(contours):
+		#	cv2.drawContours(original, contours, i, (255, 0, 0))
+
 		largest_contour = self.get_largest_contour(contours)
 
-		bb = 20 # bounding box in pixels
+		bb = 0 # bounding box in pixels
 
 		if largest_contour is not None:
 			x, y, w, h = cv2.boundingRect(largest_contour)
@@ -112,34 +166,51 @@ class Recognizer:
 			self.classify_object(rectangle)
 			cv2.rectangle(original, (x - bb, y - bb), (x + w + bb, y + h + bb), (0, 255, 0), 2)
 
-		#image = self.preprocess(image)
+		
 
-		#image = self.detect_blob(image)
+		cv2.imshow('original', original)
 
-		cv2.imshow('color', original)
-		cv2.waitKey(30)
+		cv2.waitKey(10)
 
 	def classify_object(self, image):
 
-		#cv2.imshow('object', image)
-
 		image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-		image = cv2.GaussianBlur(image, (5, 5), 1)
+		#image = cv2.GaussianBlur(image, (5, 5), 1)
 
-		threshold = cv2.getTrackbarPos('Threshold', 'color')
+		blur = cv2.getTrackbarPos('blur', 'object')
 
-		edges = cv2.Canny(image, threshold, threshold * 3)
+		if blur > 0:
+			image = cv2.blur(image, (blur, blur))
 
-		contours, hierarchy = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+		cv2.imshow('object', image)
 
-		print('# contours: ' + str(len(contours)))
+		otsu_thresh, _ = cv2.threshold(image, 0, 255, type=cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-		for contour in contours:
+		#threshold1 = cv2.getTrackbarPos('threshold1', 'edges')
+		#threshold2 = cv2.getTrackbarPos('threshold2', 'edges')
+
+		#edges = cv2.Canny(image, otsu_thresh / 2, otsu_thresh)
+
+		circles = cv2.HoughCircles(image, cv2.cv.CV_HOUGH_GRADIENT, 2, 100, otsu_thresh)
+
+		if circles is not None:
+
+			circles = np.round(circles[0, :].astype('int'))
+
+			for (x, y, r) in circles:
+				cv2.circle(image, (x, y), r, (0, 255, 0), 4)
+				cv2.putText(image, 'circle', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.2, 0)
+
+		#contours, hierarchy = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+
+		#print('# contours: ' + str(len(contours)))
+
+		#for contour in contours:
 			#approx = cv2.approxPolyDP(contour, 0.01 * cv2.arcLength(contour, True), True)
-			cv2.drawContours(edges, [contour], 0, (0, 255, 0), -1)
+		#	cv2.drawContours(edges, [contour], 0, (0, 255, 0), -1)
 
-		cv2.imshow('edges', edges)
+		cv2.imshow('edges', image)
 
 
 	def get_largest_contour(self, contours):
@@ -154,16 +225,16 @@ class Recognizer:
 
 		return largest_contour
 
-	def color_tracking(self, image):
+	def color_threshold(self, image):
 
 		hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-		hue_min = cv2.getTrackbarPos('Hue Min', 'hsv')
-		hue_max = cv2.getTrackbarPos('Hue Max', 'hsv')
-		sat_min = cv2.getTrackbarPos('Sat Min', 'hsv')
-		sat_max = cv2.getTrackbarPos('Sat Max', 'hsv')
-		val_min = cv2.getTrackbarPos('Val Min', 'hsv')
-		val_max = cv2.getTrackbarPos('Val Max', 'hsv')
+		hue_min = cv2.getTrackbarPos('hue_min', 'thresh')
+		hue_max = cv2.getTrackbarPos('hue_max', 'thresh')
+		sat_min = cv2.getTrackbarPos('sat_min', 'thresh')
+		sat_max = cv2.getTrackbarPos('sat_max', 'thresh')
+		val_min = cv2.getTrackbarPos('val_min', 'thresh')
+		val_max = cv2.getTrackbarPos('val_max', 'thresh')
 
 
 		lower = np.array([hue_min, sat_min, val_min])
@@ -171,21 +242,9 @@ class Recognizer:
 
 		mask = cv2.inRange(hsv_image, lower, upper)
 
-		res = cv2.bitwise_and(image, image, mask=mask)
+		thresh = cv2.bitwise_and(image, image, mask=mask)
 
-		cv2.imshow('hsv', res)
-		#cv2.imshow('mask', mask)
-
-		return (res, mask)
-
-	def color_histogram(self, image):
-
-		colors = ('b', 'g', 'r')
-		for i, col in enumerate(colors):
-			histr = cv2.calcHist([image], [i], None, [256], [0, 256])
-			plt.plot(histr, color = col)
-			plt.xlim([0, 256])
-		plt.draw()
+		return (thresh, mask)
 
 	def preprocess(self, image):
 		
