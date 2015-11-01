@@ -13,6 +13,14 @@ catkin_package()
 
 include_directories(${catkin_INCLUDE_DIRS})
 
-add_executable(example src/example.cpp)
+add_executable(voxel src/voxel.cpp)
+add_executable(coefficients src/coefficients.cpp)
+add_executable(passthrough src/passthrough.cpp)
+add_executable(outliers src/outliers.cpp)
+add_executable(detector src/detector.cpp)
 
-target_link_libraries(example ${catkin_LIBRARIES})
+target_link_libraries(voxel ${catkin_LIBRARIES})
+target_link_libraries(coefficients ${catkin_LIBRARIES})
+target_link_libraries(passthrough ${catkin_LIBRARIES})
+target_link_libraries(outliers ${catkin_LIBRARIES})
+target_link_libraries(detector ${catkin_LIBRARIES})
