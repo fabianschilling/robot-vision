@@ -35,14 +35,14 @@ class Recognizer:
 		cv2.namedWindow('thresh', cv2.WINDOW_NORMAL)
 		cv2.createTrackbar('hue_min', 'thresh', 0, 179, self.nothing)
 		cv2.createTrackbar('hue_max', 'thresh', 179, 179, self.nothing)
-		cv2.createTrackbar('sat_min', 'thresh', 100, 255, self.nothing)
+		cv2.createTrackbar('sat_min', 'thresh', 150, 255, self.nothing)
 		cv2.createTrackbar('sat_max', 'thresh', 255, 255, self.nothing)
-		cv2.createTrackbar('val_min', 'thresh', 100, 255, self.nothing)
+		cv2.createTrackbar('val_min', 'thresh', 70, 255, self.nothing)
 		cv2.createTrackbar('val_max', 'thresh', 255, 255, self.nothing)
 		
 		cv2.namedWindow('mask', cv2.WINDOW_NORMAL)
-		cv2.createTrackbar('dilation', 'mask', 50, 100, self.nothing)
-		cv2.createTrackbar('erosion', 'mask', 10, 100, self.nothing)
+		cv2.createTrackbar('dilation', 'mask', 20, 100, self.nothing)
+		cv2.createTrackbar('erosion', 'mask', 5, 100, self.nothing)
 
 		cv2.namedWindow('object', cv2.WINDOW_NORMAL)
 		cv2.createTrackbar('blur', 'object', 3, 10, self.nothing)
@@ -53,27 +53,13 @@ class Recognizer:
 
 		# OpenCV variables
 
-		self.scale = 0.5
+		self.scale = 0.3
+
+		plt.ion()
+		plt.show()
 
 	def nothing(self, x):
 		pass
-
-	def depth_callback(self, data):
-
-		# Convert from ROS image to OpenCV image
-		image = self.bridge.imgmsg_to_cv2(data)
-
-		# Convert to numpy array
-		image = np.array(image, dtype=np.float32)
-
-		# Scale image down
-		image = cv2.resize(image, (0,0), fx=self.scale, fy=self.scale)
-
-		# Normalize depth image to range [0, 1]
-		cv2.normalize(image, image, 0, 1, cv2.NORM_MINMAX)
-
-		cv2.imshow('depth', image)
-		cv2.waitKey(1)
 
 
 	def process_original_image(self, image):
@@ -87,16 +73,6 @@ class Recognizer:
 			#image = cv2.GaussianBlur(image, (blur, blur), 1)
 
 		#erosion = cv2.getTrackbarPos('erosion', 'processed')
-
-		#if erosion > 0:
-			# Erode
-		#	image = cv2.erode(image, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (erosion, erosion)))
-
-		#dilation = cv2.getTrackbarPos('dilation', 'processed')
-
-		#if dilation > 0:
-			# Dilate
-		#	image = cv2.dilate(image, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dilation, dilation)))
 
 		return image
 
@@ -116,6 +92,15 @@ class Recognizer:
 
 		return mask
 
+	def histogram(self, image):
+
+		#hist = cv2.calcHist([image], [0], None, [256], [0, 256])
+
+		plt.hist(image.ravel(), 256, [0, 256])
+		#plt.show()
+		plt.draw()
+		plt.pause(0.01)
+
 	def color_callback(self, message):
 
 		# Convert from ROS image to OpenCV image
@@ -127,6 +112,8 @@ class Recognizer:
 		# Process image
 		image = self.process_original_image(original)
 		cv2.imshow('processed', image)
+
+		#self.histogram(image)
 
 		# Do color thresholding
 		thresh, mask = self.color_threshold(image)
@@ -158,19 +145,93 @@ class Recognizer:
 
 		largest_contour = self.get_largest_contour(contours)
 
-		bb = 0 # bounding box in pixels
-
 		if largest_contour is not None:
 			x, y, w, h = cv2.boundingRect(largest_contour)
-			rectangle = original[y - bb:y + h + bb, x - bb: x + w + bb]
-			self.classify_object(rectangle)
-			cv2.rectangle(original, (x - bb, y - bb), (x + w + bb, y + h + bb), (0, 255, 0), 2)
-
-		
+			object_image = thresh[y:y + h, x: x + w]
+			#self.classify_object(rectangle)
+			color_name, color_bgr, prob = self.classify_color(object_image)
+			cv2.rectangle(original, (x, y), (x + w, y + h), color_bgr, 2)
+			#cv2.putText(original, color + '(' + str(prob) + ')', (x + w, y + h), cv2.FONT_HERSHEY_TRIPLEX, 0.2, 0)
 
 		cv2.imshow('original', original)
 
 		cv2.waitKey(10)
+
+	def classify_color(self, object_image):
+
+		cv2.imshow('object', object_image)
+
+		hsv_image = cv2.cvtColor(object_image, cv2.COLOR_BGR2HSV)
+
+		hist = cv2.calcHist([hsv_image], [0], None, [180], [1, 179])
+
+		total = float(np.sum(hist))
+		orange = np.sum(hist[0:12])
+		yellow = np.sum(hist[12:31])
+		green = np.sum(hist[31:70])
+		blue = np.sum(hist[70:120])
+		purple = np.sum(hist[120:162])
+		red = np.sum(hist[162:179])
+
+		colors = [orange, yellow, green, blue, purple, red]
+		color_names = ['orange', 'yellow', 'green', 'blue', 'purple', 'red']
+		color_hues = [6, 22, 50, 95, 140, 170]
+		color_rgb = [(255, 255/2, 0), (255, 255, 0), (0, 255, 0), (0, 0, 255), (255, 0, 255), (255, 0, 0)]
+		color_bgr = [(0, 255/2, 255), (0, 255, 255), (0, 255, 0), (255, 0, 0), (255, 0, 255), (0, 0, 255)]
+
+		color = np.argmax(colors)
+
+		probability = float(colors[color]) / total
+
+		#print('Color: ' + str(color) + '(' + str(probability * 100) + ')')
+
+		return (color_names[color], color_bgr[color], probability)
+
+		#color = hist.argmax()
+
+		#print(color)
+
+		# hue, _, _ = cv2.split(hsv_image)
+
+		# hue_array = hue.flatten()
+
+		# hue_hist, _ = np.histogram(hue_array, bins=32, range=(1, 179))
+
+		# hue_argmax = hue_hist.argmax()
+
+		# print(hue_argmax)
+
+		#cv2.imshow('hue', hue)
+		#cv2.imshow('sat', sat)
+		#cv2.imshow('val', val)
+
+		#print(hue.shape)
+
+		#color = np.bincount(hue.flatten()).argmax()
+
+		#print('Hue: ' + str(color))
+		#print(str(len(hue)))
+		#argmaxsat = np.bincount(sat).argmax()
+		#argmaxval = np.bincount(val).argmax()
+
+		# if color >= 0 and color < 3:
+		# 	print('red')
+		# elif color >= 3 and color < 12:
+		# 	print('orange')
+		# elif color >= 12 and color < 31:
+		# 	print('yellow')
+		# elif color >= 31 and color < 70:
+		# 	print('green')
+		# elif color >= 70 and color < 120:
+		# 	print('blue')
+		# elif color >= 120 and color < 162:
+		# 	print('purple')
+		# elif color >= 162 and color < 179:
+		# 	print('red')
+
+		#print('(h: ' + str(argmaxhue) + ', s: ' + str(argmaxsat) + ', v: ' + str(argmaxval))
+
+		#print('argmax(hue) = ' + str(argmaxhue))
 
 	def classify_object(self, image):
 
@@ -185,22 +246,23 @@ class Recognizer:
 
 		cv2.imshow('object', image)
 
-		otsu_thresh, _ = cv2.threshold(image, 0, 255, type=cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+		#otsu_thresh, _ = cv2.threshold(image, 0, 255, type=cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-		#threshold1 = cv2.getTrackbarPos('threshold1', 'edges')
-		#threshold2 = cv2.getTrackbarPos('threshold2', 'edges')
+		threshold1 = cv2.getTrackbarPos('threshold1', 'edges')
+		threshold2 = cv2.getTrackbarPos('threshold2', 'edges')
 
 		#edges = cv2.Canny(image, otsu_thresh / 2, otsu_thresh)
+		edges = cv2.Canny(image, threshold1, threshold2)
 
-		circles = cv2.HoughCircles(image, cv2.cv.CV_HOUGH_GRADIENT, 2, 100, otsu_thresh)
+		#circles = cv2.HoughCircles(image, cv2.cv.CV_HOUGH_GRADIENT, 2, 100, otsu_thresh)
 
-		if circles is not None:
+		#if circles is not None:
 
-			circles = np.round(circles[0, :].astype('int'))
+			#circles = np.round(circles[0, :].astype('int'))
 
-			for (x, y, r) in circles:
-				cv2.circle(image, (x, y), r, (0, 255, 0), 4)
-				cv2.putText(image, 'circle', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.2, 0)
+			#for (x, y, r) in circles:
+				#cv2.circle(image, (x, y), r, (0, 255, 0), 4)
+				#cv2.putText(image, 'circle', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.2, 0)
 
 		#contours, hierarchy = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -210,7 +272,7 @@ class Recognizer:
 			#approx = cv2.approxPolyDP(contour, 0.01 * cv2.arcLength(contour, True), True)
 		#	cv2.drawContours(edges, [contour], 0, (0, 255, 0), -1)
 
-		cv2.imshow('edges', image)
+		cv2.imshow('edges', edges)
 
 
 	def get_largest_contour(self, contours):
@@ -272,9 +334,22 @@ class Recognizer:
 		
 		return keypoints
 
-	def detect_edges(self, image):
+	def depth_callback(self, data):
 
-		pass
+		# Convert from ROS image to OpenCV image
+		image = self.bridge.imgmsg_to_cv2(data)
+
+		# Convert to numpy array
+		image = np.array(image, dtype=np.float32)
+
+		# Scale image down
+		image = cv2.resize(image, (0,0), fx=self.scale, fy=self.scale)
+
+		# Normalize depth image to range [0, 1]
+		cv2.normalize(image, image, 0, 1, cv2.NORM_MINMAX)
+
+		cv2.imshow('depth', image)
+		cv2.waitKey(1)
 		
 
 def main(args):
