@@ -46,6 +46,10 @@ class Recognizer:
 
 		cv2.namedWindow('object', cv2.WINDOW_NORMAL)
 		cv2.createTrackbar('blur', 'object', 3, 10, self.nothing)
+		# cv2.createTrackbar('dp', 'object', 1, 10, self.nothing)
+		# cv2.createTrackbar('minDist', 'object', 10, 500, self.nothing)
+		# cv2.createTrackbar('param1', 'object', 100, 500, self.nothing)
+		# cv2.createTrackbar('param2', 'object', 1, 100, self.nothing)
 
 		cv2.namedWindow('edges', cv2.WINDOW_NORMAL)
 		cv2.createTrackbar('threshold1', 'edges', 100, 1000, self.nothing)
@@ -122,20 +126,6 @@ class Recognizer:
 		# Process mask
 		mask = self.process_mask(mask)
 		cv2.imshow('mask', mask)
-
-		# Get image keypoints and draw them
-		#keypoints = self.detect_blobs(mask)
-		#image = cv2.drawKeypoints(image, keypoints, np.array([]), (0, 255, 0))
-
-		#largest_keypoint = None
-		#largest_keypoint_size = 0.0
-		#for keypoint in keypoints:
-		#	if keypoint.size > largest_keypoint_size:
-		#		largest_keypoint = keypoint
-		#		largest_keypoint_size = keypoint.size
-		
-		#if largest_keypoint is not None:
-		#	cv2.drawKeypoints(image, [largest_keypoint], np.array([]), (0, 255, 0))
 		
 		# Get contours
 		contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
@@ -147,9 +137,10 @@ class Recognizer:
 
 		if largest_contour is not None:
 			x, y, w, h = cv2.boundingRect(largest_contour)
-			object_image = thresh[y:y + h, x: x + w]
-			#self.classify_object(rectangle)
-			color_name, color_bgr, prob = self.classify_color(object_image)
+			object_image_color = thresh[y:y + h, x: x + w]
+			object_image = original[y:y + h, x: x + w]
+			self.classify_object(object_image)
+			color_name, color_bgr, prob = self.classify_color(object_image_color)
 			cv2.rectangle(original, (x, y), (x + w, y + h), color_bgr, 2)
 			#cv2.putText(original, color + '(' + str(prob) + ')', (x + w, y + h), cv2.FONT_HERSHEY_TRIPLEX, 0.2, 0)
 
@@ -159,7 +150,7 @@ class Recognizer:
 
 	def classify_color(self, object_image):
 
-		cv2.imshow('object', object_image)
+		#cv2.imshow('object', object_image)
 
 		hsv_image = cv2.cvtColor(object_image, cv2.COLOR_BGR2HSV)
 
@@ -187,52 +178,6 @@ class Recognizer:
 
 		return (color_names[color], color_bgr[color], probability)
 
-		#color = hist.argmax()
-
-		#print(color)
-
-		# hue, _, _ = cv2.split(hsv_image)
-
-		# hue_array = hue.flatten()
-
-		# hue_hist, _ = np.histogram(hue_array, bins=32, range=(1, 179))
-
-		# hue_argmax = hue_hist.argmax()
-
-		# print(hue_argmax)
-
-		#cv2.imshow('hue', hue)
-		#cv2.imshow('sat', sat)
-		#cv2.imshow('val', val)
-
-		#print(hue.shape)
-
-		#color = np.bincount(hue.flatten()).argmax()
-
-		#print('Hue: ' + str(color))
-		#print(str(len(hue)))
-		#argmaxsat = np.bincount(sat).argmax()
-		#argmaxval = np.bincount(val).argmax()
-
-		# if color >= 0 and color < 3:
-		# 	print('red')
-		# elif color >= 3 and color < 12:
-		# 	print('orange')
-		# elif color >= 12 and color < 31:
-		# 	print('yellow')
-		# elif color >= 31 and color < 70:
-		# 	print('green')
-		# elif color >= 70 and color < 120:
-		# 	print('blue')
-		# elif color >= 120 and color < 162:
-		# 	print('purple')
-		# elif color >= 162 and color < 179:
-		# 	print('red')
-
-		#print('(h: ' + str(argmaxhue) + ', s: ' + str(argmaxsat) + ', v: ' + str(argmaxval))
-
-		#print('argmax(hue) = ' + str(argmaxhue))
-
 	def classify_object(self, image):
 
 		image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -244,25 +189,46 @@ class Recognizer:
 		if blur > 0:
 			image = cv2.blur(image, (blur, blur))
 
-		cv2.imshow('object', image)
-
-		#otsu_thresh, _ = cv2.threshold(image, 0, 255, type=cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+		#cv2.imshow('object', image)
 
 		threshold1 = cv2.getTrackbarPos('threshold1', 'edges')
 		threshold2 = cv2.getTrackbarPos('threshold2', 'edges')
 
-		#edges = cv2.Canny(image, otsu_thresh / 2, otsu_thresh)
 		edges = cv2.Canny(image, threshold1, threshold2)
 
-		#circles = cv2.HoughCircles(image, cv2.cv.CV_HOUGH_GRADIENT, 2, 100, otsu_thresh)
+		cv2.imshow('edges', edges)
 
-		#if circles is not None:
+		contours, hierarchy = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
-			#circles = np.round(circles[0, :].astype('int'))
+		for i, contour in enumerate(contours):
+			cv2.drawContours(image, contours, i, (255, 0, 0))
+		
+		cv2.imshow('object', image)
 
-			#for (x, y, r) in circles:
-				#cv2.circle(image, (x, y), r, (0, 255, 0), 4)
-				#cv2.putText(image, 'circle', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.2, 0)
+		#cv2.imshow('object', image)
+		#otsu_thresh, _ = cv2.threshold(image, 0, 255, type=cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+		
+
+		#edges = cv2.Canny(image, otsu_thresh / 2, otsu_thresh)
+
+		# dp = cv2.getTrackbarPos('dp', 'object')
+		# minDist = cv2.getTrackbarPos('minDist', 'object')
+		# param1 = cv2.getTrackbarPos('param1', 'object')
+		# param2 = cv2.getTrackbarPos('param2', 'object')
+
+		# circles = cv2.HoughCircles(image, cv2.cv.CV_HOUGH_GRADIENT, dp, minDist, param1, param2)
+
+		# if circles is not None:
+
+		# 	print(len(circles) + ' detected.')
+
+		# 	circles = np.round(circles[0, :].astype('int'))
+
+		# 	for (x, y, r) in circles:
+		# 		cv2.circle(image, (x, y), r, (0, 255, 0), 4)
+		# 		#cv2.putText(image, 'circle', (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.2, 0)
+		
 
 		#contours, hierarchy = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -272,7 +238,9 @@ class Recognizer:
 			#approx = cv2.approxPolyDP(contour, 0.01 * cv2.arcLength(contour, True), True)
 		#	cv2.drawContours(edges, [contour], 0, (0, 255, 0), -1)
 
-		cv2.imshow('edges', edges)
+		#cv2.imshow('object', image)
+
+
 
 
 	def get_largest_contour(self, contours):
