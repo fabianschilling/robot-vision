@@ -33,8 +33,8 @@ class ColorRecognizer:
         cv2.createTrackbar('val_max', 'thresh', 255, 255, self.cb)
 
         cv2.namedWindow('edges', cv2.WINDOW_NORMAL)
-        cv2.createTrackbar('threshold1', 'edges', 100, 500, self.cb)
-        cv2.createTrackbar('threshold2', 'edges', 200, 500, self.cb)
+        cv2.createTrackbar('blur', 'edges', 0, 30, self.cb)
+        cv2.createTrackbar('kernel', 'edges', 0, 30, self.cb)
 
         self.image = None
 
@@ -67,9 +67,19 @@ class ColorRecognizer:
 
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        gray = cv2.blur(gray, (3, 3))
+        blur = cv2.getTrackbarPos('blur', 'edges')
 
-        mask = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        if blur > 0:
+            gray = cv2.blur(gray, (blur, blur))
+
+        kernel = cv2.getTrackbarPos('kernel', 'edges')
+
+        if kernel > 2 and kernel % 2 == 1:
+            mask = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, kernel, 2)
+        else:
+            mask = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 3, 2)    
+
+        
 
         #threshold1 = cv2.getTrackbarPos('threshold1', 'edges')
         #threshold2 = cv2.getTrackbarPos('threshold2', 'edges')
