@@ -25,8 +25,8 @@ class DepthDetector:
 
         cv2.namedWindow('mask', cv2.WINDOW_NORMAL)
         cv2.createTrackbar('blur', 'mask', 3, 10, self.cb)
-        cv2.createTrackbar('erosion', 'mask', 0, 50, self.cb)
-        cv2.createTrackbar('dilation', 'mask', 0, 50, self.cb)
+        cv2.createTrackbar('erosion', 'mask', 20, 50, self.cb)
+        cv2.createTrackbar('dilation', 'mask', 1, 50, self.cb)
 
         #cv2.namedWindow('original', cv2.WINDOW_NORMAL)
 
@@ -48,17 +48,17 @@ class DepthDetector:
         pass
 
 
-    def get_largest_contour(self, contours):
+    def get_largest_contours(self, contours):
 
         largest_contour_area = 0
-        largest_contour = None
+        largest_contours = []
         for contour in contours:
             contour_area = cv2.contourArea(contour)
             if contour_area > largest_contour_area:
+                largest_contours.append(contour)
                 largest_contour_area = contour_area
-                largest_contour = contour
 
-        return largest_contour
+        return largest_contours
 
     def process_mask(self, mask):
 
@@ -105,7 +105,9 @@ class DepthDetector:
         image = np.array(image, dtype=np.uint8)
 
         # Threshold zero values and create mask
-        _, mask = cv2.threshold(image, 1, 255, type=cv2.THRESH_BINARY_INV)
+        #_, mask = cv2.threshold(image, 1, 255, type=cv2.THRESH_BINARY_INV)
+
+        mask = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 3, 2)
 
         mask = self.process_mask(mask)
 
@@ -113,15 +115,15 @@ class DepthDetector:
 
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
-        largest_contour = self.get_largest_contour(contours)
+        largest_contours = self.get_largest_contours(contours)
 
-        if largest_contour is not None:
-            x, y, w, h = cv2.boundingRect(largest_contour)
+        if len(largest_contours) > 1:
+            x, y, w, h = cv2.boundingRect(largest_contours[-2])
             object_image = image[y:y + h, x: x + w]
             cv2.rectangle(image, (x, y), (x + w, y + h), (255, 255, 255), 2)
 
-        # i, contour in enumerate(contours):
-           #cv2.drawContours(image, contours, i, (255, 0, 0))
+        # #for i, contour in enumerate(contours):
+        #cv2.drawContours(image, contours, -1, (255, 255, 255))
 
         # detector = cv2.SimpleBlobDetector()
 
@@ -131,7 +133,7 @@ class DepthDetector:
 
         # cv2.drawKeypoints(image, keypoints, np.array([]), (255,255,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 
-        cv2.imshow('original', image)
+        #cv2.imshow('contours', image)
 
         # # Scale image down
         # image = cv2.resize(image, (0, 0), fx=self.scale, fy=self.scale)
@@ -140,7 +142,7 @@ class DepthDetector:
 
         
 
-        # cv2.imshow('original', image)
+        cv2.imshow('contours', image)
 
         
 
@@ -150,9 +152,9 @@ class DepthDetector:
 
         # inpaintRadius = cv2.getTrackbarPos('inpaintRadius', 'smooth')
 
-        # smooth = cv2.inpaint(image, mask, inpaintRadius, cv2.INPAINT_TELEA)
+        #smooth = cv2.inpaint(image, mask, 2, cv2.INPAINT_TELEA)
 
-        # cv2.imshow('smooth', smooth)
+        #cv2.imshow('smooth', smooth)
 
         # #threshold1 = cv2.getTrackbarPos('threshold1', 'edges')
         # #threshold2 = cv2.getTrackbarPos('threshold2', 'edges')
