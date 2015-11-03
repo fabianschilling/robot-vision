@@ -8,6 +8,7 @@ import cv2
 # ROS imports
 import rospy
 from sensor_msgs.msg import Image
+from ras_vision_recognizer.msg import Rect
 from cv_bridge import CvBridge
 
 
@@ -21,6 +22,8 @@ class DepthDetector:
 
         self.subscriber = rospy.Subscriber('camera/depth/image', Image, self.depth_callback, queue_size=1)
         self.subscriber = rospy.Subscriber('camera/rgb/image_raw', Image, self.color_callback, queue_size=1)
+
+        self.publisher = rospy.Publisher('vision/object_rect', Rect, queue_size=1)
 
         self.bridge = CvBridge()
 
@@ -150,6 +153,14 @@ class DepthDetector:
             y += pady
 
             self.object_contour = (x, y, w, h)
+
+            msg = Rect()
+            msg.x = x
+            msg.y = y
+            msg.width = w
+            msg.height = h
+
+            self.publisher.publish(msg)
 
             # Mind the padding!
             cv2.rectangle(original, (x, y), (x + w, y + h), (255, 255, 255), 1) 
