@@ -21,95 +21,18 @@ class DepthDetector:
         rospy.init_node(self.node_name, anonymous=True)
 
         self.subscriber = rospy.Subscriber('camera/depth/image', Image, self.depth_callback, queue_size=1)
-        self.subscriber = rospy.Subscriber('camera/rgb/image_raw', Image, self.color_callback, queue_size=1)
 
         self.publisher = rospy.Publisher('vision/object_rect', Rect, queue_size=1)
 
         self.bridge = CvBridge()
 
-        cv2.namedWindow('mask', cv2.WINDOW_NORMAL)
-        cv2.createTrackbar('blur', 'mask', 3, 10, self.cb)
-        cv2.createTrackbar('erosion', 'mask', 20, 50, self.cb)
-        cv2.createTrackbar('dilation', 'mask', 1, 50, self.cb)
+        self.erosion = 20
+        self.dilation = 1
 
-        cv2.namedWindow('thresh', cv2.WINDOW_NORMAL)
-        cv2.createTrackbar('hue_min', 'thresh', 0, 179, self.cb)
-        cv2.createTrackbar('hue_max', 'thresh', 179, 179, self.cb)
-        cv2.createTrackbar('sat_min', 'thresh', 150, 255, self.cb)
-        cv2.createTrackbar('sat_max', 'thresh', 255, 255, self.cb)
-        cv2.createTrackbar('val_min', 'thresh', 70, 255, self.cb)
-        cv2.createTrackbar('val_max', 'thresh', 255, 255, self.cb)
-
-        # OpenCV variables
-
-        #self.scale = 1
-        #self.pad = 20
         self.object_contour = None
 
     def cb(self, x):
         pass
-
-    def color_callback(self, data):
-
-        # Don't go further if no object is recognized
-        if self.object_contour is None:
-            return
-
-        # Convert from ROS image to OpenCV image
-        original = self.bridge.imgmsg_to_cv2(data, 'bgr8')
-
-        # Unwrap object contour
-        x, y, w, h = self.object_contour
-
-        # Crop image
-        image = original[y:y + h, x: x + w]
-
-        # Do color thresholding
-        thresh, mask = self.color_threshold(image)
-        
-        cv2.imshow('thresh', thresh)
-        #cv2.imshow('objmask', mask)
-        cv2.imshow('object', image)
-
-    def color_threshold(self, image):
-
-        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-        hue_min = cv2.getTrackbarPos('hue_min', 'thresh')
-        hue_max = cv2.getTrackbarPos('hue_max', 'thresh')
-        sat_min = cv2.getTrackbarPos('sat_min', 'thresh')
-        sat_max = cv2.getTrackbarPos('sat_max', 'thresh')
-        val_min = cv2.getTrackbarPos('val_min', 'thresh')
-        val_max = cv2.getTrackbarPos('val_max', 'thresh')
-
-
-        lower = np.array([hue_min, sat_min, val_min])
-        upper = np.array([hue_max, sat_max, val_max])
-
-        mask = cv2.inRange(hsv_image, lower, upper)
-
-        thresh = cv2.bitwise_and(image, image, mask=mask)
-
-        return (thresh, mask)
-
-    def process_mask(self, mask):
-
-        blur = cv2.getTrackbarPos('blur', 'processed')
-
-        if blur > 0:
-            image = cv2.blur(image, (blur, blur))
-
-        erosion = cv2.getTrackbarPos('erosion', 'mask')
-
-        if erosion > 0:
-            mask = cv2.erode(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (erosion, erosion)))
-
-        dilation = cv2.getTrackbarPos('dilation', 'mask')
-
-        if dilation > 0:
-            mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dilation, dilation)))
-
-        return mask
 
     def depth_callback(self, data):
 
@@ -136,10 +59,12 @@ class DepthDetector:
         mask = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 3, 2)
 
         # Apply erosion and dilation
-        mask = self.process_mask(mask)
+        #mask = self.process_mask(mask)
+        mask = cv2.erode(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.erosion, self.erosion)))
+        mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.dilation, self.dilation)))
 
         # Show the filtered mask
-        cv2.imshow('mask', mask)
+        #cv2.imshow('mask', mask)
 
         # Find contours in the mask
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
