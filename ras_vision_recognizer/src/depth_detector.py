@@ -20,6 +20,7 @@ class DepthDetector:
         rospy.init_node(self.node_name, anonymous=True)
 
         self.subscriber = rospy.Subscriber('camera/depth/image', Image, self.depth_callback, queue_size=1)
+        self.subscriber = rospy.Subscriber('camera/rgb/image_raw', Image, self.color_callback, queue_size=1)
 
         self.bridge = CvBridge()
 
@@ -28,37 +29,65 @@ class DepthDetector:
         cv2.createTrackbar('erosion', 'mask', 20, 50, self.cb)
         cv2.createTrackbar('dilation', 'mask', 1, 50, self.cb)
 
-        #cv2.namedWindow('original', cv2.WINDOW_NORMAL)
-
-        #cv2.namedWindow('mask', cv2.WINDOW_NORMAL)
-
-        #cv2.namedWindow('smooth', cv2.WINDOW_NORMAL)
-        #cv2.createTrackbar('inpaintRadius', 'smooth', 0, 10, self.cb)
-
-        #cv2.namedWindow('edges', cv2.WINDOW_NORMAL)
-        #cv2.createTrackbar('threshold1', 'edges', 0, 300, self.cb)
-        #cv2.createTrackbar('threshold2', 'edges', 0, 300, self.cb)
+        cv2.namedWindow('thresh', cv2.WINDOW_NORMAL)
+        cv2.createTrackbar('hue_min', 'thresh', 0, 179, self.cb)
+        cv2.createTrackbar('hue_max', 'thresh', 179, 179, self.cb)
+        cv2.createTrackbar('sat_min', 'thresh', 150, 255, self.cb)
+        cv2.createTrackbar('sat_max', 'thresh', 255, 255, self.cb)
+        cv2.createTrackbar('val_min', 'thresh', 70, 255, self.cb)
+        cv2.createTrackbar('val_max', 'thresh', 255, 255, self.cb)
 
         # OpenCV variables
 
         #self.scale = 1
         #self.pad = 20
+        self.object_contour = None
 
     def cb(self, x):
         pass
 
+    def color_callback(self, data):
 
-    def get_largest_contours(self, contours):
+        # Don't go further if no object is recognized
+        if self.object_contour is None:
+            return
 
-        largest_contour_area = 0
-        largest_contours = []
-        for contour in contours:
-            contour_area = cv2.contourArea(contour)
-            if contour_area > largest_contour_area:
-                largest_contours.append(contour)
-                largest_contour_area = contour_area
+        # Convert from ROS image to OpenCV image
+        original = self.bridge.imgmsg_to_cv2(data, 'bgr8')
 
-        return largest_contours
+        # Unwrap object contour
+        x, y, w, h = self.object_contour
+
+        # Crop image
+        image = original[y:y + h, x: x + w]
+
+        # Do color thresholding
+        thresh, mask = self.color_threshold(image)
+        
+        cv2.imshow('thresh', thresh)
+        #cv2.imshow('objmask', mask)
+        cv2.imshow('object', image)
+
+    def color_threshold(self, image):
+
+        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        hue_min = cv2.getTrackbarPos('hue_min', 'thresh')
+        hue_max = cv2.getTrackbarPos('hue_max', 'thresh')
+        sat_min = cv2.getTrackbarPos('sat_min', 'thresh')
+        sat_max = cv2.getTrackbarPos('sat_max', 'thresh')
+        val_min = cv2.getTrackbarPos('val_min', 'thresh')
+        val_max = cv2.getTrackbarPos('val_max', 'thresh')
+
+
+        lower = np.array([hue_min, sat_min, val_min])
+        upper = np.array([hue_max, sat_max, val_max])
+
+        mask = cv2.inRange(hsv_image, lower, upper)
+
+        thresh = cv2.bitwise_and(image, image, mask=mask)
+
+        return (thresh, mask)
 
     def process_mask(self, mask):
 
@@ -82,88 +111,80 @@ class DepthDetector:
     def depth_callback(self, data):
 
         # Convert from ROS image to OpenCV image
-        image = self.bridge.imgmsg_to_cv2(data)
+        original = self.bridge.imgmsg_to_cv2(data)
 
         # Convert to numpy array
-        image = np.array(image, dtype=np.float32)
-
-        cv2.imshow('original', image)
-
-        padx = 80
-        pady = 20
-
-        height, width = image.shape
-
-        image = image[pady: height - pady, padx: width - padx]
-
-        cv2.imshow('padded', image)
+        original = np.array(original, dtype=np.float32)
 
         # Normalize depth image to range [0, 255]
-        cv2.normalize(image, image, 255, 0, cv2.NORM_MINMAX)
+        cv2.normalize(original, original, 255, 0, cv2.NORM_MINMAX)
 
         # Convert to numpy array (unint8)
-        image = np.array(image, dtype=np.uint8)
+        original = np.array(original, dtype=np.uint8)
 
-        # Threshold zero values and create mask
-        #_, mask = cv2.threshold(image, 1, 255, type=cv2.THRESH_BINARY_INV)
+        # Crop out part of the image that does not have noise
+        padx = 80
+        pady = 20
+        height, width = original.shape
+        image = original[pady: height - pady, padx: width - padx]
+        cv2.rectangle(original, (padx, pady), (width - padx, height - pady), (255, 255, 255), 1)
 
+        # Adaptive threshold detects NaN blobs and gradient changes
         mask = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 3, 2)
 
+        # Apply erosion and dilation
         mask = self.process_mask(mask)
 
+        # Show the filtered mask
         cv2.imshow('mask', mask)
 
+        # Find contours in the mask
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
-        largest_contours = self.get_largest_contours(contours)
+        object_contour = self.detect_object(contours)
 
-        if len(largest_contours) > 1:
-            x, y, w, h = cv2.boundingRect(largest_contours[-2])
-            object_image = image[y:y + h, x: x + w]
-            cv2.rectangle(image, (x, y), (x + w, y + h), (255, 255, 255), 2)
+        if object_contour is not None:
+            x, y, w, h = object_contour
 
-        # #for i, contour in enumerate(contours):
-        #cv2.drawContours(image, contours, -1, (255, 255, 255))
+            x += padx
+            y += pady
 
-        # detector = cv2.SimpleBlobDetector()
+            self.object_contour = (x, y, w, h)
 
-        # keypoints = detector.detect(mask)
+            # Mind the padding!
+            cv2.rectangle(original, (x, y), (x + w, y + h), (255, 255, 255), 1) 
 
-        # print(len(keypoints))
-
-        # cv2.drawKeypoints(image, keypoints, np.array([]), (255,255,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-
-        #cv2.imshow('contours', image)
-
-        # # Scale image down
-        # image = cv2.resize(image, (0, 0), fx=self.scale, fy=self.scale)
-
-        
-
-        
-
-        cv2.imshow('contours', image)
-
-        
-
-        # cv2.imshow('mask', mask)
-
-        # #edges = cv2.Canny(image, 100, 200)
-
-        # inpaintRadius = cv2.getTrackbarPos('inpaintRadius', 'smooth')
-
-        #smooth = cv2.inpaint(image, mask, 2, cv2.INPAINT_TELEA)
-
-        #cv2.imshow('smooth', smooth)
-
-        # #threshold1 = cv2.getTrackbarPos('threshold1', 'edges')
-        # #threshold2 = cv2.getTrackbarPos('threshold2', 'edges')
-
-        # #edges = cv2.Canny(smooth, threshold1, threshold2)
-
-        # #cv2.imshow('edges', edges)
+        cv2.imshow('detection', original)
 
         cv2.waitKey(1)
+
+    def detect_object(self, contours):
+
+        # Get (second) largest contour and 
+        largest_contour_area = 0
+        largest_contours = []
+        for contour in contours:
+            contour_area = cv2.contourArea(contour)
+            if contour_area > largest_contour_area:
+                largest_contours.append(contour)
+                largest_contour_area = contour_area
+
+        if len(largest_contours) > 1:
+
+            # Get bounding rectangle of largest object
+            x, y, w, h = cv2.boundingRect(largest_contours[-2])
+
+            # Get size and aspect ratio of the detected object
+            size = w * h
+            aspect = 1.0 * w / h
+
+            # Decide if this is object based on size and aspect ratio
+            if size > 5000 and size < 14000 and aspect > 0.9 and aspect < 1.1:
+ 
+                return (x, y, w, h)
+
+        return None 
+
 
 def main():
     print('Running... Press CTRL-C to quit.')
