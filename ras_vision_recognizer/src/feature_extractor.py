@@ -21,6 +21,15 @@ class FeatureExtractor:
 
         self.node_name = 'feature_extractor'
 
+        cv2.namedWindow('original', cv2.WINDOW_NORMAL)
+        cv2.createTrackbar('blur', 'original', 3, 10, self.cb)
+
+        cv2.namedWindow('morphed', cv2.WINDOW_NORMAL)
+
+        cv2.namedWindow('edges', cv2.WINDOW_NORMAL)
+        cv2.createTrackbar('thresh1', 'edges', 0, 255, self.cb)
+        cv2.createTrackbar('thresh2', 'edges', 0, 255, self.cb)
+
         self.bridge = CvBridge()
 
         rospy.init_node(self.node_name, anonymous=True)
@@ -29,42 +38,35 @@ class FeatureExtractor:
 
         #self.publisher = rospy.Publisher('vision/object_rect', Rect, queue_size=1)
 
-        cv2.namedWindow('original', cv2.WINDOW_NORMAL)
-        cv2.createTrackbar('blur', 'original', 0, 10, self.cb)
-
-        cv2.namedWindow('morphed', cv2.WINDOW_NORMAL)
-
-        cv2.namedWindow('edges', cv2.WINDOW_NORMAL)
-        cv2.createTrackbar('thresh1', 'edges', 0, 255, self.cb)
-        cv2.createTrackbar('thresh2', 'edges', 0, 255, self.cb)
-
     def cb(self, x):
         pass
 
     def image_callback(self, data):
 
         # Convert from ROS image to OpenCV image
-        original = self.bridge.imgmsg_to_cv2(data)
-
-        resized = cv2.resize(original, (100, 100))
+        image = self.bridge.imgmsg_to_cv2(data)
 
         blur = cv2.getTrackbarPos('blur', 'original')
 
         if blur > 0:
-            resized = cv2.blur(resized, (blur, blur))
+            image = cv2.blur(image, (blur, blur))
 
-        cv2.imshow('original', resized)
+        cv2.imshow('original', image)
 
-        res = cv2.adaptiveThreshold(resized, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 3, 2)
+        #res = cv2.adaptiveThreshold(original, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 5, 3)
 
-        cv2.imshow('morphed', res)
+        otsu_thresh, _ = cv2.threshold(image, 0, 255, type=cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-        thresh1 = cv2.getTrackbarPos('thresh1', 'edges')
-        thresh2 = cv2.getTrackbarPos('thresh2', 'edges')
+        edges = cv2.Canny(image, otsu_thresh * 0.5, otsu_thresh)
+
+        cv2.imshow('morphed', edges)
+
+        # thresh1 = cv2.getTrackbarPos('thresh1', 'edges')
+        # thresh2 = cv2.getTrackbarPos('thresh2', 'edges')
         
-        edges = cv2.Canny(res, thresh1, thresh2)
+        # edges = cv2.Canny(res, thresh1, thresh2)
 
-        cv2.imshow('edges', edges)
+        # cv2.imshow('edges', edges)
 
         # kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(5, 5))
         # close = cv2.morphologyEx(resized,cv2.MORPH_CLOSE, kernel)
