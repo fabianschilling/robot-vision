@@ -47,7 +47,7 @@ class ShapeRecognizer:
 
         self.count = 0
 
-        self.clf = joblib.load('/home/fabian/catkin_ws/src/ras_vision/svm/svm.pkl')
+        self.clf = joblib.load('/home/fabian/catkin_ws/src/ras_vision/ras_vision_svm/svm.pkl')
 
         self.subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.color_callback, queue_size=1)
         self.subscriber = rospy.Subscriber('/vision/object_rect', Rect, self.object_callback, queue_size=1)

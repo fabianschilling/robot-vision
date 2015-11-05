@@ -1,0 +1,17 @@
+<package>
+  <name>ras_vision_launch</name>
+  <version>0.0.0</version>
+  <description>The launchers package</description>
+
+  <maintainer email="fabsch@kth.se">Fabian Schillin</maintainer>
+
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>std_msgs</build_depend>
+
+  <run_depend>std_msgs</run_depend>
+
+</package>
+

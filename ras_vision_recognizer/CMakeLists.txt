@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(ras_vision_recognizer)
-find_package(catkin REQUIRED COMPONENTS rospy sensor_msgs std_msgs message_generation)
+find_package(catkin REQUIRED COMPONENTS rospy roscpp sensor_msgs std_msgs message_generation)
 find_package(OpenCV REQUIRED)
 add_message_files(FILES Rect.msg)
 generate_messages(DEPENDENCIES std_msgs)
