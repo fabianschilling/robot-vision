@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 
+# Future imports
+from __future__ import print_function
+
 # Regular imports
 import sys
 import numpy as np
 import cv2
 import os
+import signal
 
 # Scikit learn
 
@@ -17,11 +21,14 @@ import rospy
 from sensor_msgs.msg import Image
 from ras_vision_recognizer.msg import Rect
 from cv_bridge import CvBridge
+from std_msgs.msg import UInt8
 
 
 class ShapeRecognizer:
 
     def __init__(self):
+
+        signal.signal(signal.SIGINT, signal_callback)
 
         self.node_name = 'shape_recognizer'
 
@@ -40,14 +47,12 @@ class ShapeRecognizer:
 
         self.count = 0
 
-        print(os.getcwd())
-
         self.clf = joblib.load('/home/fabian/catkin_ws/src/ras_vision/svm/svm.pkl')
 
         self.subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.color_callback, queue_size=1)
-        self.subscriber = rospy.Subscriber('vision/object_rect', Rect, self.object_callback, queue_size=1)
+        self.subscriber = rospy.Subscriber('/vision/object_rect', Rect, self.object_callback, queue_size=1)
 
-        #self.publisher = rospy.Publisher('vision/object_rect', Rect, queue_size=1)
+        self.publisher = rospy.Publisher('/object/shape', UInt8, queue_size=1)
 
     def cb(self, x):
         pass
@@ -80,14 +85,9 @@ class ShapeRecognizer:
         cv2.imshow('canny', resized)
 
         self.classify(resized)
-
-        key = cv2.waitKey(1)
         
-        if key == 10: # Return key pressed
-            filename = 'images/image' + str(self.count + 1) + '.jpg'
-            cv2.imwrite(filename, resized)
-            print('Image saved: ' + filename)
-            self.count += 1
+        if cv2.waitKey(1) == 27: # ESC key pressed
+            shutdown()
 
     def classify(self, image):
 
@@ -95,12 +95,26 @@ class ShapeRecognizer:
         flattened = data.flatten()
         x = scale(flattened)
         predition = self.clf.predict(x)
-        if predition == 0:
-            print('cube')
-        elif predition == 1:
-            print('sphere')
-        #print(x)
 
+        msg = UInt8()
+        msg.data = int(predition)
+        self.publisher.publish(msg)
+
+        shape = 'cube' if predition == 0 else 'sphr'
+
+        print('Shape: ' + shape, end='\r')
+        sys.stdout.flush()
+
+
+def signal_callback(signal, frame):
+    shutdown()
+
+def shutdown():
+    sys.stdout.flush()
+    print()
+    print('Quitting...')
+    rospy.signal_shutdown('Quitting...')
+    cv2.destroyAllWindows()
 
 def main():
     print('Running... Press CTRL-C to quit.')

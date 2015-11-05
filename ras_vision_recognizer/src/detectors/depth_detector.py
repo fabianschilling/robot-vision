@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 
+# Future imports
+from __future__ import print_function
+
 # Regular imports
 import sys
+import signal
 import numpy as np
 import cv2
 
@@ -16,6 +20,16 @@ class DepthDetector:
 
     def __init__(self):
 
+        signal.signal(signal.SIGINT, signal_callback)
+
+        cv2.namedWindow('detection', cv2.WINDOW_NORMAL)
+        #cv2.namedWindow('mask', cv2.WINDOW_NORMAL)
+
+        self.erosion = 20
+        self.dilation = 1
+
+        self.object_contour = None
+
         self.node_name = 'depth_detector'
 
         rospy.init_node(self.node_name, anonymous=True)
@@ -25,14 +39,6 @@ class DepthDetector:
         self.publisher = rospy.Publisher('vision/object_rect', Rect, queue_size=1)
 
         self.bridge = CvBridge()
-
-        cv2.namedWindow('detection', cv2.WINDOW_NORMAL)
-        cv2.namedWindow('mask', cv2.WINDOW_NORMAL)
-
-        self.erosion = 20
-        self.dilation = 1
-
-        self.object_contour = None
 
     def cb(self, x):
         pass
@@ -65,7 +71,7 @@ class DepthDetector:
         mask = cv2.erode(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.erosion, self.erosion)))
         mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.dilation, self.dilation)))
 
-        cv2.imshow('mask', mask)
+        #cv2.imshow('mask', mask)
 
         # Find contours in the mask
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
@@ -98,7 +104,8 @@ class DepthDetector:
 
         cv2.imshow('detection', original)
 
-        cv2.waitKey(1)
+        if cv2.waitKey(1) == 27: # ESC
+            shutdown()
 
     def detect_object(self, contours):
 
@@ -120,7 +127,8 @@ class DepthDetector:
             size = w * h
             aspect = 1.0 * w / h
 
-            print('Size: ' + str(size) + ', aspect: ' + str(aspect))
+            print('Size: ' + str(size) + ', aspect: ' + str(aspect), end='\r')
+            sys.stdout.flush()
 
             # Decide if this is object based on size and aspect ratio
             if size > 5000 and size < 20000 and aspect > 0.75 and aspect < 1.25:
@@ -129,9 +137,19 @@ class DepthDetector:
 
         return None 
 
+def signal_callback(signal, frame):
+    shutdown()
+
+def shutdown():
+    sys.stdout.flush()
+    print()
+    print('Quitting...')
+    rospy.signal_shutdown('Quitting...')
+    cv2.destroyAllWindows()
+
 
 def main():
-    print('Running... Press CTRL-C to quit.')
+    print('Detecting... Press CTRL-C or ESC to quit.')
     DepthDetector()
     try:
         rospy.spin()
