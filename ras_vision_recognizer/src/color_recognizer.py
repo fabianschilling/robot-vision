@@ -166,7 +166,7 @@ class ColorRecognizer:
 
         probability = float(colors[color]) / total
 
-        #print('Color: ' + str(color) + '(' + str(probability * 100) + ')')
+        print('Color: ' + str(color_names[color]) + ' (' + str(probability * 100) + ')')
 
         return (color_names[color], probability)
 

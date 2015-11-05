@@ -69,9 +69,12 @@ class DepthDetector:
         # Find contours in the mask
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
+        cv2.drawContours(original, contours, -1, (0, 0, 0))
+
         object_contour = self.detect_object(contours)
 
         if object_contour is not None:
+
             x, y, w, h = object_contour
 
             x += padx
@@ -114,8 +117,10 @@ class DepthDetector:
             size = w * h
             aspect = 1.0 * w / h
 
+            print('Object size: ' + str(size))
+
             # Decide if this is object based on size and aspect ratio
-            if size > 5000 and size < 14000 and aspect > 0.9 and aspect < 1.1:
+            if size > 5000 and size < 20000 and aspect > 0.9 and aspect < 1.1:
  
                 return (x, y, w, h)
 

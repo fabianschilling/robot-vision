@@ -4,10 +4,13 @@
 import sys
 import numpy as np
 import cv2
+import os
 
 # Scikit learn
 
-from sklearn import preprocessing
+from sklearn.preprocessing import scale
+from sklearn.externals import joblib
+from sklearn.svm import SVC
 
 # ROS imports
 import rospy
@@ -36,6 +39,10 @@ class FeatureExtractor:
         self.image = None
 
         self.count = 0
+
+        print(os.getcwd())
+
+        self.clf = joblib.load('catkin_ws/src/ras_vision/svm/svm.pkl')
 
         self.subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.color_callback, queue_size=1)
         self.subscriber = rospy.Subscriber('vision/object_rect', Rect, self.object_callback, queue_size=1)
@@ -72,6 +79,8 @@ class FeatureExtractor:
 
         cv2.imshow('canny', resized)
 
+        self.classify(resized)
+
         key = cv2.waitKey(1)
         
         if key == 10: # Return key pressed
@@ -79,6 +88,19 @@ class FeatureExtractor:
             cv2.imwrite(filename, resized)
             print('Image saved: ' + filename)
             self.count += 1
+
+    def classify(self, image):
+
+        data = np.array(image, dtype=np.float32)
+        flattened = data.flatten()
+        x = scale(flattened)
+        predition = self.clf.predict(x)
+        if predition == 0:
+            print('cube')
+        elif predition == 1:
+            print('sphere')
+        #print(x)
+
 
 def main():
     print('Running... Press CTRL-C to quit.')
