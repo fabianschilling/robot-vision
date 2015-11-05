@@ -47,6 +47,8 @@ class ShapeRecognizer:
 
         self.count = 0
 
+        self.directory = '/home/fabian/images/'
+
         self.clf = joblib.load('/home/fabian/catkin_ws/src/ras_vision/ras_vision_svm/svm.pkl')
 
         self.subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.color_callback, queue_size=1)
@@ -85,8 +87,16 @@ class ShapeRecognizer:
         cv2.imshow('canny', resized)
 
         self.classify(resized)
-        
-        if cv2.waitKey(1) == 27: # ESC key pressed
+
+        key = cv2.waitKey(1)
+
+        if key == 10:
+            filename = self.directory + 'image' + str(self.count + 1) + '.jpg' 
+            cv2.imwrite(filename, resized)
+            print('Captured image: ' + filename)
+            self.count += 1
+
+        if key == 27: # ESC key pressed
             shutdown()
 
     def classify(self, image):
@@ -94,16 +104,26 @@ class ShapeRecognizer:
         data = np.array(image, dtype=np.float32)
         flattened = data.flatten()
         x = scale(flattened)
-        predition = self.clf.predict(x)
+        #predition = self.clf.predict(x)
 
-        msg = UInt8()
-        msg.data = int(predition)
-        self.publisher.publish(msg)
+        prob_cube, prob_sphere, prob_cross = self.clf.predict_proba(x)[0]
 
-        shape = 'cube' if predition == 0 else 'sphr'
-
-        print('Shape: ' + shape, end='\r')
+        if prob_cube > 0.8:
+            print('Shape: cube (' + str(prob_cube) + ')' , end='\r')
+        elif prob_sphere > 0.8:
+            print('Shape: sphr (' + str(prob_sphere) + ')', end='\r')
+        elif prob_cross > 0.8:
+            print('Shape: crss (' + str(prob_cross) + '),', end='\r')
         sys.stdout.flush()
+
+        #msg = UInt8()
+        #msg.data = int(predition)
+        #self.publisher.publish(msg)
+
+        #shape = 'cube' if predition == 0 else 'sphr'
+
+        #print('Shape: ' + shape, end='\r')
+        #
 
 
 def signal_callback(signal, frame):

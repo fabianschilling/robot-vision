@@ -71,7 +71,8 @@ class ColorRecognizer:
         color, color_name, prob = self.classify_color(thresh)
 
         if prob > 0.7 and prob is not None:
-            print('Color: ' + str(color) + ', prob: ' + str(int(prob * 100)) + ' %', end='\r')
+            #print('Color: ' + color_name + ', prob: ' + str(int(prob * 100)) + ' %', end='\r')
+            print('Color: ' + color_name, end='\r')
             sys.stdout.flush()       
 
             msg = UInt8()
@@ -111,8 +112,8 @@ class ColorRecognizer:
         red = np.sum(hist[162:179]) + np.sum(hist[0:5])
 
         colors = [orange, yellow, green, blue, purple, red]
-        #color_names = ['orange', 'yellow', 'green', 'blue', 'purple', 'red']
-        color_names = ['o', 'y', 'g', 'b', 'p', 'r']
+        color_names = ['ora', 'ylw', 'grn', 'blu', 'prp', 'red']
+        #color_names = ['o', 'y', 'g', 'b', 'p', 'r']
         color_hues = [6, 22, 50, 95, 140, 170]
         color_rgb = [(255, 255/2, 0), (255, 255, 0), (0, 255, 0), (0, 0, 255), (255, 0, 255), (255, 0, 0)]
         color_bgr = [(0, 255/2, 255), (0, 255, 255), (0, 255, 0), (255, 0, 0), (255, 0, 255), (0, 0, 255)]

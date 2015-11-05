@@ -20,28 +20,35 @@ class DepthDetector:
 
     def __init__(self):
 
+        # Catch CTRL-C signal
         signal.signal(signal.SIGINT, signal_callback)
 
-        cv2.namedWindow('detection', cv2.WINDOW_NORMAL)
-        #cv2.namedWindow('mask', cv2.WINDOW_NORMAL)
+        self.init_parameters()
+        self.init_windows()
+        self.init_ros()
 
+
+    def init_parameters(self):
+
+        self.min_size = 4000
+        self.max_size = 20000
         self.erosion = 20
         self.dilation = 1
-
         self.object_contour = None
 
-        self.node_name = 'depth_detector'
 
-        rospy.init_node(self.node_name, anonymous=True)
+    def init_windows(self):
 
-        self.subscriber = rospy.Subscriber('camera/depth/image', Image, self.depth_callback, queue_size=1)
+        cv2.namedWindow('detection', cv2.WINDOW_NORMAL)
 
-        self.publisher = rospy.Publisher('vision/object_rect', Rect, queue_size=1)
 
+    def init_ros(self):
+
+        rospy.init_node('depth_detector', anonymous=True)
+        self.subscriber = rospy.Subscriber('/camera/depth/image', Image, self.depth_callback, queue_size=1)
+        self.publisher = rospy.Publisher('/vision/object_rect', Rect, queue_size=1)
         self.bridge = CvBridge()
 
-    def cb(self, x):
-        pass
 
     def depth_callback(self, data):
 
@@ -86,6 +93,7 @@ class DepthDetector:
 
             x, y, w, h = object_contour
 
+            # Mind the padding
             x += padx
             y += pady
 
@@ -99,10 +107,12 @@ class DepthDetector:
 
             self.publisher.publish(msg)
 
-            # Mind the padding!
+            # Draw rectangle around detected object
             cv2.rectangle(original, (x, y), (x + w, y + h), (255, 255, 255), 1) 
 
         cv2.imshow('detection', original)
+
+        #rospy.sleep(0.1)
 
         if cv2.waitKey(1) == 27: # ESC
             shutdown()
@@ -131,14 +141,20 @@ class DepthDetector:
             sys.stdout.flush()
 
             # Decide if this is object based on size and aspect ratio
-            if size > 5000 and size < 20000 and aspect > 0.75 and aspect < 1.25:
+            if size > self.min_size and size < self.max_size and aspect > 0.75 and aspect < 1.25:
  
                 return (x, y, w, h)
 
         return None 
 
+
+def nothing(x):
+        pass
+
+
 def signal_callback(signal, frame):
     shutdown()
+
 
 def shutdown():
     sys.stdout.flush()
@@ -148,14 +164,11 @@ def shutdown():
     cv2.destroyAllWindows()
 
 
-def main():
-    print('Detecting... Press CTRL-C or ESC to quit.')
+def main(argv):
+    print('Detecting objects.')
     DepthDetector()
-    try:
-        rospy.spin()
-    except KeyboardInterrupt:
-        print('Quitting')
-        cv2.destroyAllWindows()
+    rospy.spin()
+
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv)
