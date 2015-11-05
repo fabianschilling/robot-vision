@@ -11,11 +11,11 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
 
-class ShapeDetector:
+class ShapeRecognizer:
 
     def __init__(self):
 
-        self.node_name = 'shape_detector'
+        self.node_name = 'shape_recognizer'
 
         self.bridge = CvBridge()
 
@@ -90,7 +90,7 @@ class ShapeDetector:
 
 def main():
     print('Running... Press CTRL-C to quit.')
-    ShapeDetector()
+    ShapeRecognizer()
     try:
         rospy.spin()
     except KeyboardInterrupt:

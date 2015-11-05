@@ -19,11 +19,11 @@ from ras_vision_recognizer.msg import Rect
 from cv_bridge import CvBridge
 
 
-class FeatureExtractor:
+class ShapeRecognizer:
 
     def __init__(self):
 
-        self.node_name = 'feature_extractor'
+        self.node_name = 'shape_recognizer'
 
         cv2.namedWindow('original', cv2.WINDOW_NORMAL)
         cv2.createTrackbar('blur', 'original', 0, 20, self.cb)
@@ -42,7 +42,7 @@ class FeatureExtractor:
 
         print(os.getcwd())
 
-        self.clf = joblib.load('catkin_ws/src/ras_vision/svm/svm.pkl')
+        self.clf = joblib.load('/home/fabian/catkin_ws/src/ras_vision/svm/svm.pkl')
 
         self.subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.color_callback, queue_size=1)
         self.subscriber = rospy.Subscriber('vision/object_rect', Rect, self.object_callback, queue_size=1)
@@ -104,7 +104,7 @@ class FeatureExtractor:
 
 def main():
     print('Running... Press CTRL-C to quit.')
-    FeatureExtractor()
+    ShapeRecognizer()
     try:
         rospy.spin()
     except KeyboardInterrupt:

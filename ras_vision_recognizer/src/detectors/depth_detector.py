@@ -26,6 +26,9 @@ class DepthDetector:
 
         self.bridge = CvBridge()
 
+        cv2.namedWindow('detection', cv2.WINDOW_NORMAL)
+        cv2.namedWindow('mask', cv2.WINDOW_NORMAL)
+
         self.erosion = 20
         self.dilation = 1
 
@@ -59,17 +62,17 @@ class DepthDetector:
         mask = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 3, 2)
 
         # Apply erosion and dilation
-        #mask = self.process_mask(mask)
         mask = cv2.erode(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.erosion, self.erosion)))
         mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.dilation, self.dilation)))
 
-        # Show the filtered mask
-        #cv2.imshow('mask', mask)
+        cv2.imshow('mask', mask)
 
         # Find contours in the mask
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
-        cv2.drawContours(original, contours, -1, (0, 0, 0))
+        cv2.drawContours(mask, contours, -1, (0, 0, 0))
+
+        # Show the filtered mask
 
         object_contour = self.detect_object(contours)
 
@@ -117,10 +120,10 @@ class DepthDetector:
             size = w * h
             aspect = 1.0 * w / h
 
-            print('Object size: ' + str(size))
+            print('Size: ' + str(size) + ', aspect: ' + str(aspect))
 
             # Decide if this is object based on size and aspect ratio
-            if size > 5000 and size < 20000 and aspect > 0.9 and aspect < 1.1:
+            if size > 5000 and size < 20000 and aspect > 0.75 and aspect < 1.25:
  
                 return (x, y, w, h)
 
