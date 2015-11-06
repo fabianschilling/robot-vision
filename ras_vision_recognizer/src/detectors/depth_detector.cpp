@@ -26,8 +26,8 @@ static const int PADX = 70;
 static const int PADY = 20;
 static const int EROSION = 20;
 static const int DILATION = 1;
-static const int MIN_SIZE = 4000;
-static const int MAX_SIZE = 20000;
+static const int MIN_SIZE = 3000;
+static const int MAX_SIZE = 11000;
 static const double MIN_ASPECT = 0.8;
 static const double MAX_ASPECT = 1.2;
 static const cv::Scalar color_black(0, 0, 0);
@@ -105,22 +105,27 @@ void depth_callback(const sensor_msgs::Image::ConstPtr& message) {
 
         std::vector<cv::Point> object_contour = contours[contours.size() - 2];
 
-        cv::Rect bounding_rect = cv::boundingRect(cv::Mat(object_contour));
+        cv::Rect rect = cv::boundingRect(cv::Mat(object_contour));
 
-        int size = bounding_rect.area();
-        double aspect = (double) bounding_rect.width / bounding_rect.height;
+        int size = rect.area();
+        double aspect = (double) rect.width / rect.height;
 
         // Check if size and aspect ratio qualifies for object
         if (size > MIN_SIZE && size < MAX_SIZE && aspect > MIN_ASPECT && aspect < MAX_ASPECT) {
 
             // Draw a rectangle around the object
-            cv::rectangle(roi_inpainted, bounding_rect, color_black);
+            cv::rectangle(roi_inpainted, rect, color_black);
+
+            // Put some info text on the screen
+            std::ostringstream text;
+            text << "Object size: " << size << " px";
+            cv::putText(roi_inpainted, text.str(), cv::Point(rect.x + rect.width, rect.y), cv::FONT_HERSHEY_COMPLEX_SMALL, 0.5, color_black, 1);
 
             ras_vision_recognizer::Rect message;
-            message.x = bounding_rect.x;
-            message.y = bounding_rect.y;
-            message.width = bounding_rect.width;
-            message.height = bounding_rect.height;
+            message.x = rect.x;
+            message.y = rect.y;
+            message.width = rect.width;
+            message.height = rect.height;
 
             publisher.publish(message);
         }
