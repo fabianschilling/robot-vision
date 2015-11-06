@@ -32,12 +32,12 @@ class ShapeRecognizer:
 
         self.node_name = 'shape_recognizer'
 
-        cv2.namedWindow('original', cv2.WINDOW_NORMAL)
-        cv2.createTrackbar('blur', 'original', 0, 20, self.cb)
+        # cv2.namedWindow('original', cv2.WINDOW_NORMAL)
+        # cv2.createTrackbar('blur', 'original', 0, 20, self.cb)
 
-        cv2.namedWindow('canny', cv2.WINDOW_NORMAL)
-        cv2.createTrackbar('lower', 'canny', 0, 255, self.cb)
-        cv2.createTrackbar('upper', 'canny', 0, 255, self.cb)
+        cv2.namedWindow('equalized', cv2.WINDOW_NORMAL)
+        # cv2.createTrackbar('lower', 'canny', 0, 255, self.cb)
+        # cv2.createTrackbar('upper', 'canny', 0, 255, self.cb)
 
         self.bridge = CvBridge()
 
@@ -74,25 +74,31 @@ class ShapeRecognizer:
 
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        image = cv2.blur(image, (3, 3))
+        image = cv2.equalizeHist(image)
 
-        cv2.imshow('original', image)
+        image = cv2.resize(image, (30, 30))
 
-        mask = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 3, 2)
+        cv2.imshow('equalized', image)
 
-        opening = cv2.morphologyEx(mask, cv2.MORPH_OPEN, (5, 5))
+        # image = cv2.blur(image, (3, 3))
 
-        resized = cv2.resize(opening, (30, 30))
+        # cv2.imshow('original', image)
 
-        cv2.imshow('canny', resized)
+        # mask = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 3, 2)
 
-        self.classify(resized)
+        # opening = cv2.morphologyEx(mask, cv2.MORPH_OPEN, (5, 5))
+
+        # resized = cv2.resize(opening, (30, 30))
+
+        # cv2.imshow('canny', resized)
+
+        self.classify(image)
 
         key = cv2.waitKey(1)
 
         if key == 10:
             filename = self.directory + 'image' + str(self.count + 1) + '.jpg' 
-            cv2.imwrite(filename, resized)
+            cv2.imwrite(filename, image)
             print('Captured image: ' + filename)
             self.count += 1
 
@@ -106,14 +112,12 @@ class ShapeRecognizer:
         x = scale(flattened)
         #predition = self.clf.predict(x)
 
-        prob_cube, prob_sphere, prob_cross = self.clf.predict_proba(x)[0]
+        prob_cube, prob_sphere = self.clf.predict_proba(x)[0]
 
-        if prob_cube > 0.8:
+        if prob_cube > 0.6:
             print('Shape: cube (' + str(prob_cube) + ')' , end='\r')
-        elif prob_sphere > 0.8:
+        elif prob_sphere > 0.6:
             print('Shape: sphr (' + str(prob_sphere) + ')', end='\r')
-        elif prob_cross > 0.8:
-            print('Shape: crss (' + str(prob_cross) + '),', end='\r')
         sys.stdout.flush()
 
         #msg = UInt8()
