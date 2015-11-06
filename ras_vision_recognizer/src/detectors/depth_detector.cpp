@@ -26,8 +26,8 @@ static const int PADX = 70;
 static const int PADY = 20;
 static const int EROSION = 20;
 static const int DILATION = 1;
-static const int MIN_SIZE = 3000;
-static const int MAX_SIZE = 11000;
+static const int MIN_AREA = 3000;
+static const int MAX_AREA = 11000;
 static const double MIN_ASPECT = 0.8;
 static const double MAX_ASPECT = 1.2;
 static const cv::Scalar color_black(0, 0, 0);
@@ -35,6 +35,30 @@ static const cv::Scalar color_black(0, 0, 0);
 // Global variables
 ros::Subscriber subscriber;
 ros::Publisher publisher;
+
+std::vector<cv::Rect> filter_contours(std::vector<std::vector<cv::Point>>& contours) {
+
+    std::vector<cv::Rect> rects;
+
+    for (std::vector<cv::Point> contour: contours) {
+
+        double area = std::fabs(cv::contourArea(cv::Mat(contour)));
+
+        if (area > MIN_AREA && area < MAX_AREA) {
+
+            cv::Rect rect = cv::boundingRect(contour);
+
+            double aspect = (double) rect.height / (double) rect.width;
+
+            if (aspect > MIN_ASPECT && aspect < MAX_ASPECT) {
+
+                rects.push_back(rect);
+            }
+        }
+    }
+
+    return rects;
+}
 
 bool compare_contour_areas(std::vector<cv::Point> contour1, std::vector<cv::Point> contour2) {
     return std::fabs(cv::contourArea(cv::Mat(contour1))) < std::fabs(cv::contourArea(cv::Mat(contour2)));
@@ -97,39 +121,49 @@ void depth_callback(const sensor_msgs::Image::ConstPtr& message) {
     cv::findContours(thresh, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
     //cv::drawContours(roi_image, contours, -1, black);
 
-    // Check if contours found
-    if (contours.size() > 1) {
+    std::vector<cv::Rect> rects = filter_contours(contours);
 
-        // Sort contours by contour area
-        std::sort(contours.begin(), contours.end(), compare_contour_areas);
+    std::cout << rects.size() << std::endl;
 
-        std::vector<cv::Point> object_contour = contours[contours.size() - 2];
+    for (cv::Rect rect: rects) {
 
-        cv::Rect rect = cv::boundingRect(cv::Mat(object_contour));
-
-        int size = rect.area();
-        double aspect = (double) rect.width / rect.height;
-
-        // Check if size and aspect ratio qualifies for object
-        if (size > MIN_SIZE && size < MAX_SIZE && aspect > MIN_ASPECT && aspect < MAX_ASPECT) {
-
-            // Draw a rectangle around the object
-            cv::rectangle(roi_inpainted, rect, color_black);
-
-            // Put some info text on the screen
-            std::ostringstream text;
-            text << "Object size: " << size << " px";
-            cv::putText(roi_inpainted, text.str(), cv::Point(rect.x + rect.width, rect.y), cv::FONT_HERSHEY_COMPLEX_SMALL, 0.5, color_black, 1);
-
-            ras_vision_recognizer::Rect message;
-            message.x = rect.x;
-            message.y = rect.y;
-            message.width = rect.width;
-            message.height = rect.height;
-
-            publisher.publish(message);
-        }
+        // Draw a rectangle around the object
+        cv::rectangle(roi_inpainted, rect, color_black);
     }
+
+//    // Check if contours found
+//    if (contours.size() > 1) {
+
+//        // Sort contours by contour area
+//        std::sort(contours.begin(), contours.end(), compare_contour_areas);
+
+//        std::vector<cv::Point> object_contour = contours[contours.size() - 2];
+
+//        cv::Rect rect = cv::boundingRect(cv::Mat(object_contour));
+
+//        int size = rect.area();
+//        double aspect = (double) rect.width / rect.height;
+
+//        // Check if size and aspect ratio qualifies for object
+//        if (size > MIN_AREA && size < MAX_AREA && aspect > MIN_ASPECT && aspect < MAX_ASPECT) {
+
+//            // Draw a rectangle around the object
+//            cv::rectangle(roi_inpainted, rect, color_black);
+
+//            // Put some info text on the screen
+//            std::ostringstream text;
+//            text << "Object size: " << size << " px";
+//            cv::putText(roi_inpainted, text.str(), cv::Point(rect.x + rect.width, rect.y), cv::FONT_HERSHEY_COMPLEX_SMALL, 0.5, color_black, 1);
+
+//            ras_vision_recognizer::Rect message;
+//            message.x = rect.x;
+//            message.y = rect.y;
+//            message.width = rect.width;
+//            message.height = rect.height;
+
+//            publisher.publish(message);
+//        }
+//    }
 
     cv::imshow("image", roi_inpainted);
 

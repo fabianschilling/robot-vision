@@ -26,3 +26,6 @@ include_directories(${catkin_INCLUDE_DIRS})
 add_executable(depth_detector src/detectors/depth_detector.cpp)
 target_link_libraries(depth_detector ${catkin_LIBRARIES})
 target_link_libraries(depth_detector ${OpenCV_LIBS})
+
+# C++11
+set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
