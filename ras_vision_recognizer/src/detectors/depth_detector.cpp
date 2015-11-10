@@ -31,10 +31,17 @@ static const int MAX_AREA = 11000;
 static const double MIN_ASPECT = 0.8;
 static const double MAX_ASPECT = 1.2;
 static const cv::Scalar color_black(0, 0, 0);
+static const std::string DEPTH_WINDOW = "depth";
+static const std::string THRESH_WINDOW = "thresh";
 
 // Global variables
 ros::Subscriber subscriber;
 ros::Publisher publisher;
+
+// Trackbar variables
+int dilation = 0;
+int erosion = 25;
+int blockSize = 5;
 
 std::vector<cv::Rect> filter_contours(std::vector<std::vector<cv::Point>>& contours) {
 
@@ -81,10 +88,8 @@ void depth_callback(const sensor_msgs::Image::ConstPtr& message) {
     // Map range from 0 to 255 based on MIN_RANGE and MAX_RANGE
     cv::Mat image(cv_image->image.rows, cv_image->image.cols, CV_8UC1);
     for (int i = 0; i < cv_image->image.rows; i++) {
-
         float* di = cv_image->image.ptr<float>(i);
         char* ii = image.ptr<char>(i);
-
         for (int j = 0; j < cv_image->image.cols; j++) {
             ii[j] = (char) (255 * ((di[j] - MIN_RANGE) / (MAX_RANGE - MIN_RANGE)));
         }
@@ -99,33 +104,44 @@ void depth_callback(const sensor_msgs::Image::ConstPtr& message) {
 
     // Inpainting
     cv::Mat roi_inpainted;
-    cv::inpaint(roi_image, roi_nan_mask, roi_inpainted, 1.0, cv::INPAINT_TELEA);
+    cv::inpaint(roi_image, roi_nan_mask, roi_inpainted, -1, cv::INPAINT_TELEA);
     //cv::imshow("inpainted", roi_inpainted);
 
     // Adaptive Threshold (based on inpaint)
     cv::Mat thresh;
     int block_size = 3;
     double param1 = 2.0;
-    cv::adaptiveThreshold(roi_inpainted, thresh, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, block_size, param1);
+    cv::adaptiveThreshold(roi_inpainted, thresh, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, blockSize, param1);
     //cv::imshow("thresh", thresh);
 
     // Erosion and dilation
-    cv::Mat erosion_kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(EROSION, EROSION));
-    cv::erode(thresh, thresh, erosion_kernel);
+    if (erosion > 0) {
+        cv::Mat erosion_kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(erosion, erosion));
+        cv::erode(thresh, thresh, erosion_kernel);
+    }
 
-    cv::Mat dilation_kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(DILATION, DILATION));
-    cv::erode(thresh, thresh, dilation_kernel);
+    if (dilation > 0) {
+        cv::Mat dilation_kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(dilation, dilation));
+        cv::dilate(thresh, thresh, dilation_kernel);
+    }
 
     // Find and draw contours
     std::vector<std::vector<cv::Point> > contours;
     cv::findContours(thresh, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
-    //cv::drawContours(roi_image, contours, -1, black);
+    cv::drawContours(roi_inpainted, contours, -1, color_black);
 
     std::vector<cv::Rect> rects = filter_contours(contours);
 
-    std::cout << rects.size() << std::endl;
+    //std::cout << rects.size() << std::endl;
 
     for (cv::Rect rect: rects) {
+
+        ras_vision_recognizer::Rect message;
+        message.x = rect.x + PADX;
+        message.y = rect.y + PADY;
+        message.width = rect.width;
+        message.height = rect.height;
+        publisher.publish(message);
 
         // Draw a rectangle around the object
         cv::rectangle(roi_inpainted, rect, color_black);
@@ -165,7 +181,8 @@ void depth_callback(const sensor_msgs::Image::ConstPtr& message) {
 //        }
 //    }
 
-    cv::imshow("image", roi_inpainted);
+    cv::imshow(DEPTH_WINDOW, roi_inpainted);
+    cv::imshow(THRESH_WINDOW, thresh);
 
     if (int key = cv::waitKey(1) != -1) {
         std::cout << key << " pressed." << std::endl;
@@ -179,9 +196,17 @@ int main(int argc, char ** argv) {
 
     ros::NodeHandle nh;
 
+    cv::namedWindow(DEPTH_WINDOW, cv::WINDOW_NORMAL);
+    cv::namedWindow(THRESH_WINDOW, cv::WINDOW_NORMAL);
+
+    //cv::createTrackbar("dilation", THRESH_WINDOW, &dilation, 100);
+    cv::createTrackbar("erosion", THRESH_WINDOW, &erosion, 100);
+    //cv::createTrackbar("block size", THRESH_WINDOW, &blockSize, 30);
+
+
     subscriber = nh.subscribe<sensor_msgs::Image>("/camera/depth/image", 1, depth_callback);
 
-    publisher = nh.advertise<ras_vision_recognizer::Rect>("/object/rect", 1);
+    publisher = nh.advertise<ras_vision_recognizer::Rect>("/vision/object_rect", 1);
 
     ros::spin();
 
