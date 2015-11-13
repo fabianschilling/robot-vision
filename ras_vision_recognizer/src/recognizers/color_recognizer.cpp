@@ -18,12 +18,15 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+// Constants
 static const cv::Scalar color_black(0, 0, 0);
+static const std::string IMAGE_WINDOW = "image";
 
 // Global variables
 ros::Subscriber imageSubscriber;
 ros::Subscriber objectSubsriber;
 ros::Publisher publisher;
+cv::Mat image;
 
 void colorCallback(const sensor_msgs::Image::ConstPtr& message) {
 
@@ -36,16 +39,37 @@ void colorCallback(const sensor_msgs::Image::ConstPtr& message) {
         return;
     }
 
-    cv::Mat image = cv_image->image;
-
-    cv::imshow("image", image);
-
-    cv::waitKey(1);
+    image = cv_image->image;
 
 }
 
 void objectCallback(const ras_vision_recognizer::Rect::ConstPtr& message) {
-    std::cout << "object callback" << std::endl;
+
+    if (image.empty()) {
+        return;
+    }
+
+    // Crop object ROI out of image
+    cv::Rect rect;
+    rect.x = message->x;
+    rect.y = message->y;
+    rect.width = message->width;
+    rect.height = message->height;
+    cv::Mat objectImage = image(rect);
+
+    // Convert to HSV color space
+    cv::Mat hsvImage;
+    cv::cvtColor(objectImage, hsvImage, cv::COLOR_RGB2HSV);
+
+    // Compute histogram
+    cv::MatND hist;
+    //cv::calcHist()
+
+    cv::imshow(IMAGE_WINDOW, hsvImage);
+
+    cv::waitKey(1);
+
+    //std::cout << "object callback" << std::endl;
 }
 
 int main(int argc, char ** argv) {
@@ -53,6 +77,8 @@ int main(int argc, char ** argv) {
     ros::init(argc, argv, "color_recognizer");
 
     ros::NodeHandle nh;
+
+    cv::namedWindow(IMAGE_WINDOW, cv::WINDOW_NORMAL);
 
     imageSubscriber = nh.subscribe<sensor_msgs::Image>("/camera/rgb/image_raw", 1, colorCallback);
     objectSubsriber = nh.subscribe<ras_vision_recognizer::Rect>("/vision/object_rect", 1, objectCallback);
