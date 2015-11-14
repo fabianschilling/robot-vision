@@ -66,14 +66,16 @@ class MaterialRecognizer:
 
         nan_ratio = float(nans) / float(size)
 
+        distance = np.nanmean(image)
+
         material = 'wood' if nan_ratio > 0.75 else 'plastic'
 
         msg = UInt8()
         msg.data = 0 if material == 'wood' else 1
         self.publisher.publish(msg)
 
-        print('Material: ' + material + ', ratio: ' + str(nan_ratio), end='\r')
-        sys.stdout.flush()
+        print('nan ratio: ' + str(nan_ratio))
+        print('distance: ' + str(distance))
         
         if cv2.waitKey(1) == 27: # ESC
             shutdown()

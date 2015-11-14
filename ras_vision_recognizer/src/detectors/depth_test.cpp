@@ -31,8 +31,8 @@ static const int MIN_AREA = 500;
 static const int MAX_AREA = 6000;
 static const int MIN_DEBRIS_AREA = 7000;
 static const int MAX_DEBRIS_AREA = 50000;
-static const double MIN_ASPECT = 0.6;
-static const double MAX_ASPECT = 1.4;
+static const double MIN_ASPECT = 0.5;
+static const double MAX_ASPECT = 1.5;
 static const cv::Scalar colorBlack(0, 0, 0);
 static const cv::Scalar colorWhite(255, 255, 255);
 static const cv::Scalar colorRed(0, 0, 255);
@@ -151,9 +151,11 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
         // Background subtraction
         cv::Mat foregroundImage;
         cv::subtract(backgroundImage, rangeImage, foregroundImage);
+        if (visualization) cv::imshow("foreground", foregroundImage);
 
         // Thresholding
         cv::Mat threshold;
+        //cv::adaptiveThreshold(foregroundImage, threshold, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, CV_THRESH_BINARY, 3, 2);
         cv::threshold(foregroundImage, threshold, thresh, 255, cv::THRESH_BINARY);
         if (visualization) cv::imshow(WIN_THRESH, threshold);
 
@@ -187,21 +189,31 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
                     cv::Mat hsvImage;
                     cv::cvtColor(objectRoi, hsvImage, cv::COLOR_BGR2HSV);
 
-                    //cv::imshow("possible object", hsvImage);
-
                     std::vector<cv::Mat> hsvPlanes;
 
                     cv::split(hsvImage, hsvPlanes);
-
-                    //cv::Scalar saturation = cv::mean(hsvPlanes[1]);
 
                     double minSat;
                     double maxSat;
                     cv::minMaxLoc(hsvPlanes[1], &minSat, &maxSat);
 
+                    // Object detected
                     if (maxSat > minSaturation) {
 
-                        cv::rectangle(colorImage, realRect, colorGreen);
+                        //cv::rectangle(colorImage, realRect, colorGreen);
+                        cv::Rect bounding;
+                        bounding.x = realRect.x - (int) (0.05 * realRect.width);
+                        bounding.y = realRect.y - (int) (0.1 * realRect.height);
+                        bounding.width = (int) (1.1 * realRect.width);
+                        bounding.height = (int) (1.4 * realRect.height);
+                        cv::rectangle(colorImage, bounding, colorBlue);
+
+                        ras_vision_recognizer::Rect message;
+                        message.x = bounding.x;
+                        message.y = bounding.y;
+                        message.width = bounding.width;
+                        message.height = bounding.height;
+                        publisher.publish(message);
 
                     }
                 }
@@ -251,22 +263,24 @@ int main(int argc, char ** argv) {
         enableSubtraction = true;
     }
 
-    cv::namedWindow(WIN_ROI, cv::WINDOW_NORMAL);
-    cv::createTrackbar("up", WIN_ROI, &uRoi, 200);
-    cv::createTrackbar("down", WIN_ROI, &dRoi, 200);
-    cv::createTrackbar("left", WIN_ROI, &lRoi, 200);
-    cv::createTrackbar("right", WIN_ROI, &rRoi, 200);
+    if (visualization) {
+        cv::namedWindow(WIN_ROI, cv::WINDOW_NORMAL);
+        cv::createTrackbar("up", WIN_ROI, &uRoi, 200);
+        cv::createTrackbar("down", WIN_ROI, &dRoi, 200);
+        cv::createTrackbar("left", WIN_ROI, &lRoi, 200);
+        cv::createTrackbar("right", WIN_ROI, &rRoi, 200);
 
-    cv::namedWindow(WIN_RANGE, cv::WINDOW_NORMAL);
-    cv::createTrackbar("min", WIN_RANGE, &minRange, 50);
-    cv::createTrackbar("max", WIN_RANGE, &maxRange, 900);
+        cv::namedWindow(WIN_RANGE, cv::WINDOW_NORMAL);
+        cv::createTrackbar("min", WIN_RANGE, &minRange, 50);
+        cv::createTrackbar("max", WIN_RANGE, &maxRange, 900);
 
-    cv::namedWindow(WIN_OPEN, cv::WINDOW_NORMAL);
-    cv::createTrackbar("kernel", WIN_OPEN, &kSize, 20);
-    cv::createTrackbar("iternations", WIN_OPEN, &iterations, 20);
+        cv::namedWindow(WIN_OPEN, cv::WINDOW_NORMAL);
+        cv::createTrackbar("kernel", WIN_OPEN, &kSize, 20);
+        cv::createTrackbar("iternations", WIN_OPEN, &iterations, 20);
 
-    cv::namedWindow(WIN_THRESH, cv::WINDOW_NORMAL);
-    cv::createTrackbar("thresh", WIN_THRESH, &thresh, 20);
+        cv::namedWindow(WIN_THRESH, cv::WINDOW_NORMAL);
+        cv::createTrackbar("thresh", WIN_THRESH, &thresh, 20);
+    }
 
     cv::namedWindow(WIN_DETECT, cv::WINDOW_NORMAL);
     cv::createTrackbar("min saturation", WIN_DETECT, &minSaturation, 255);

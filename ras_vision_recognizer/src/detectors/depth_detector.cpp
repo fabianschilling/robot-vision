@@ -163,13 +163,18 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
     cv::adaptiveThreshold(inpaintImage, thresh, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, bs, 2);
     cv::imshow(THRESH_WIN, thresh);
 
-    cv::Mat eroded;
+    cv::Mat opening;
+    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
+    cv::morphologyEx(thresh, opening, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), 10);
+    cv::imshow("opening", opening);
+    //if (visualization) cv::imshow(WIN_OPEN, opening);
+    /*cv::Mat eroded;
     cv::Mat erosionKernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(9, 9));
     cv::erode(thresh, eroded, erosionKernel);
     cv::imshow("erosion", eroded);
 
     std::vector<std::vector<cv::Point>> objectContours;
-    cv::findContours(eroded, objectContours, CV_RETR_CCOMP, CV_CHAIN_APPROX_SIMPLE);
+    cv::findContours(opening, objectContours, CV_RETR_CCOMP, CV_CHAIN_APPROX_SIMPLE);
     //cv::drawContours(inpaintImage, objectContours, -1, colorWhite);
 
     std::vector<std::vector<cv::Point>> contoursPoly(objectContours.size());
@@ -190,6 +195,7 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
             cv::rectangle(inpaintImage, rect, colorBlack);
         }
     }
+    */
 
 
     cv::imshow("yes", inpaintImage);

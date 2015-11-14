@@ -9,6 +9,8 @@ find_package(catkin REQUIRED COMPONENTS
     message_generation
     image_transport
     cv_bridge
+    pcl_conversions
+    pcl_ros
 )
 
 # OpenCV
@@ -31,6 +33,9 @@ target_link_libraries(depth_test ${OpenCV_LIBS} ${Boost_LIBRARIES} ${catkin_LIBR
 
 add_executable(color_recognizer src/recognizers/color_recognizer.cpp)
 target_link_libraries(color_recognizer ${OpenCV_LIBS} ${Boost_LIBRARIES} ${catkin_LIBRARIES})
+
+add_executable(pcl_detector src/detectors/pcl_detector.cpp)
+target_link_libraries(pcl_detector ${OpenCV_LIBS} ${Boost_LIBRARIES} ${catkin_LIBRARIES})
 
 # C++11
 set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
