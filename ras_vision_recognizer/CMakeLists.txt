@@ -15,7 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 # OpenCV
 find_package(OpenCV REQUIRED)
-include_directories(include ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS})
+include_directories(include ${catkin_INCLUDE_DIRS})
 
 # Messages
 add_message_files(FILES Rect.msg)
@@ -26,16 +26,16 @@ catkin_package(CATKIN_DEPENDS message_runtime)
 include_directories(${catkin_INCLUDE_DIRS})
 
 add_executable(depth_detector src/detectors/depth_detector.cpp)
-target_link_libraries(depth_detector ${OpenCV_LIBS} ${Boost_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(depth_detector ${OpenCV_LIBS} ${catkin_LIBRARIES})
 
 add_executable(depth_test src/detectors/depth_test.cpp)
-target_link_libraries(depth_test ${OpenCV_LIBS} ${Boost_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(depth_test ${OpenCV_LIBS} ${catkin_LIBRARIES})
 
 add_executable(color_recognizer src/recognizers/color_recognizer.cpp)
-target_link_libraries(color_recognizer ${OpenCV_LIBS} ${Boost_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(color_recognizer ${OpenCV_LIBS} ${catkin_LIBRARIES})
 
-add_executable(pcl_detector src/detectors/pcl_detector.cpp)
-target_link_libraries(pcl_detector ${OpenCV_LIBS} ${Boost_LIBRARIES} ${catkin_LIBRARIES})
+#add_executable(pcl_detector src/detectors/pcl_detector.cpp)
+#target_link_libraries(pcl_detector ${OpenCV_LIBS} ${catkin_LIBRARIES})
 
 # C++11
 set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")

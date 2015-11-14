@@ -1,38 +1,52 @@
 #include <ros/ros.h>
+// PCL specific includes
 #include <sensor_msgs/PointCloud2.h>
-#include <pcl_msgs/ModelCoefficients.h>
-#include <pcl/conversions.h>
+#include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <pcl_conversions/pcl_conversions.h>
-#include <pcl/visualization/cloud_viewer.h>
 
-#include <pcl/sample_consensus/model_types.h>
-#include <pcl/sample_consensus/method_types.h>
-#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/filters/voxel_grid.h>
 
-ros::Publisher publisher;
-ros::Subscriber subscriber;
+ros::Publisher pub;
 
-void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& input) {
+void
+cloud_cb (const sensor_msgs::PointCloud2ConstPtr& cloud_msg)
+{
+  // Container for original & filtered data
+  pcl::PCLPointCloud2* cloud = new pcl::PCLPointCloud2;
+  pcl::PCLPointCloud2ConstPtr cloudPtr(cloud);
+  pcl::PCLPointCloud2 cloud_filtered;
 
-    pcl::PCLPointCloud2 pcl_pc2;
-    pcl_conversions::toPCL(*input,pcl_pc2);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr temp_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::fromPCLPointCloud2(pcl_pc2,*temp_cloud);
+  // Convert to PCL data type
+  pcl_conversions::toPCL(*cloud_msg, *cloud);
 
-    pcl::visualization::CloudViewer viewer ("Simple Cloud Viewer");
-    viewer.showCloud (temp_cloud);
+  // Perform the actual filtering
+  pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
+  sor.setInputCloud (cloudPtr);
+  sor.setLeafSize (0.1, 0.1, 0.1);
+  sor.filter (cloud_filtered);
+
+  // Convert to ROS data type
+  sensor_msgs::PointCloud2 output;
+  pcl_conversions::fromPCL(cloud_filtered, output);
+
+  // Publish the data
+  pub.publish (output);
 }
 
-int main(int argc, char** argv) {
+int
+main (int argc, char** argv)
+{
+  // Initialize ROS
+  ros::init (argc, argv, "pcl_detector");
+  ros::NodeHandle nh;
 
-    ros::init(argc, argv, "pcl_detector");
-    ros::NodeHandle nh;
+  // Create a ROS subscriber for the input point cloud
+  ros::Subscriber sub = nh.subscribe ("/camera/depth/points", 1, cloud_cb);
 
-    subscriber = nh.subscribe<sensor_msgs::PointCloud2>("/camera/depth_registered/points", 1, cloudCallback);
+  // Create a ROS publisher for the output point cloud
+  pub = nh.advertise<sensor_msgs::PointCloud2> ("/pointcloud", 1);
 
-    publisher = nh.advertise<pcl_msgs::ModelCoefficients> ("output", 1);
-
-    ros::spin();
+  // Spin
+  ros::spin ();
 }

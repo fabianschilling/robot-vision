@@ -75,7 +75,7 @@ cv::Mat colorImage;
 static const std::string FILENAME = "/home/fabian/catkin_ws/src/ras_vision/background.jpg";
 
 // Visualization
-bool visualization = false;
+bool visualization = true;
 
 cv::Rect convertRect(cv::Rect rect) {
     return cv::Rect(rect.x + lRoi, rect.y + uRoi, rect.width, rect.height);
@@ -205,7 +205,7 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
                         bounding.x = realRect.x - (int) (0.05 * realRect.width);
                         bounding.y = realRect.y - (int) (0.1 * realRect.height);
                         bounding.width = (int) (1.1 * realRect.width);
-                        bounding.height = (int) (1.4 * realRect.height);
+                        bounding.height = (int) (1.3 * realRect.height);
                         cv::rectangle(colorImage, bounding, colorBlue);
 
                         ras_vision_recognizer::Rect message;

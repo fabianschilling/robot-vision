@@ -36,6 +36,8 @@ class MaterialRecognizer:
 
         self.count = 0
 
+        self.directory = '/home/fabian/catkin_ws/src/ras_vision/ras_vision_data/material/'
+
         self.depth_subscriber = rospy.Subscriber('/camera/depth/image', Image, self.depth_callback, queue_size=1)
         self.rect_subscriber = rospy.Subscriber('/vision/object_rect', Rect, self.object_callback, queue_size=1)
 
@@ -76,9 +78,16 @@ class MaterialRecognizer:
 
         print('nan ratio: ' + str(nan_ratio))
         print('distance: ' + str(distance))
+
+        key = cv2.waitKey(1)
         
-        if cv2.waitKey(1) == 27: # ESC
+        if key == 27: # ESC
             shutdown()
+        elif key == 10:
+            filename = self.directory + 'plastic' + str(self.count + 1) + '.jpg' 
+            cv2.imwrite(filename, image)
+            print('Captured image: ' + filename)
+            self.count += 1
 
     def classify(self, image):
 
