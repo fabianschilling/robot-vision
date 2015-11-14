@@ -18,6 +18,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/photo/photo.hpp> // inpaint
+#include <opencv2/features2d/features2d.hpp> // blobs
 
 // Constants
 static const double MIN_RANGE = 0.0;
@@ -39,23 +40,24 @@ static const std::string THRESH_WIN = "thresh";
 static const std::string RANGE_WIN = "range";
 static const std::string ROI_WIN = "roi";
 static const std::string EDGE_WIN = "edge";
+static const std::string NOISE_WIN = "no noise";
 
 // Global variables
-ros::Subscriber subscriber;
+ros::Subscriber depthSubscriber;
 ros::Publisher publisher;
 
 // Trackbar variables
 int dilation = 0;
 int erosion = 20;
-int blockSize = 3;
+int blockSize = 11;
 int minRange = 20; //cm
 int maxRange = 100; //cm
-int uRoi = 10; //px
-int dRoi = 10; //px
+int uRoi = 100; //px
+int dRoi = 15; //px
 int lRoi = 50; //px
-int rRoi = 60; //px
-int lower = 100;
-int upper = 200;
+int rRoi = 65; //px
+int lower = 25;
+int upper = 50;
 
 
 std::vector<cv::Rect> filterContours(std::vector<std::vector<cv::Point>>& contours) {
@@ -86,7 +88,7 @@ std::vector<std::vector<cv::Point>> filterNanContours(std::vector<std::vector<cv
 
     std::vector<std::vector<cv::Point>> filteredContours;
     for (std::vector<cv::Point> contour: nanContours) {
-        if (std::fabs(cv::contourArea(cv::Mat(contour))) > 200) {
+        if (std::fabs(cv::contourArea(cv::Mat(contour))) < 200) {
             filteredContours.push_back(contour);
         }
     }
@@ -99,19 +101,119 @@ bool compareContourAreas(std::vector<cv::Point> contour1, std::vector<cv::Point>
     return std::fabs(cv::contourArea(cv::Mat(contour1))) < std::fabs(cv::contourArea(cv::Mat(contour2)));
 }
 
+cv::Mat normalize(cv::Mat image) {
+    double minRangeD = minRange / 100.0;
+    double maxRangeD = maxRange / 100.0;
+    cv::Mat normalized(image.rows, image.cols, CV_8UC1);
+    for (int i = 0; i < image.rows; i++) {
+        float* di = image.ptr<float>(i);
+        char* ii = normalized.ptr<char>(i);
+        for (int j = 0; j < image.cols; j++) {
+            if (di[j] > maxRangeD) {
+                ii[j] = (char) 0;
+            } else {
+                ii[j] = (char) (255 * ((di[j] - minRangeD) / (maxRangeD - minRangeD)));
+            }
+        }
+    }
+    return normalized;
+}
+
 void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
 
-    cv_bridge::CvImagePtr cvImage;
+    cv::Mat image;
 
     try {
-        cvImage = cv_bridge::toCvCopy(message, sensor_msgs::image_encodings::TYPE_32FC1);
+        image = cv_bridge::toCvCopy(message, sensor_msgs::image_encodings::TYPE_32FC1)->image;
     } catch (cv_bridge::Exception& e) {
         ROS_ERROR("cv_bridge exception: %s", e.what());
         return;
     }
 
-    //cv::imshow("original", cv_image->image);
+    // Crop ROI and visualize
+    cv::Rect roi = cv::Rect(lRoi, uRoi, image.cols - (lRoi + rRoi), image.rows - (uRoi + dRoi));
+    cv::Mat roiImage = image(roi);
+    cv::rectangle(image, roi, colorWhite);
+    cv::imshow(ROI_WIN, image);
 
+    // Get mask of NaN values
+    cv::Mat nanMask = cv::Mat(roiImage != roiImage);
+
+    // Normalize image
+    cv::Mat rangeImage = normalize(roiImage);
+    cv::imshow(RANGE_WIN, rangeImage);
+
+    // Find noise contours and create mask
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(nanMask, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+    std::vector<std::vector<cv::Point>> smallContours;
+    smallContours = filterNanContours(contours);
+    cv::Mat noiseMask(nanMask.rows, nanMask.cols, CV_8UC1, colorBlack);
+    cv::drawContours(noiseMask, smallContours, -1, colorWhite, CV_FILLED);
+
+    // Inpaint image based on noise mask & blur
+    cv::Mat inpaintImage;
+    cv::inpaint(rangeImage, noiseMask, inpaintImage, -1, cv::INPAINT_TELEA);
+    //cv::GaussianBlur(inpaintImage, inpaintImage, cv::Size(3, 3), 1);
+    //cv::blur(inpaintImage, inpaintImage, cv::Size(3, 3));
+    cv::imshow(NOISE_WIN, inpaintImage);
+
+    cv::Mat thresh;
+    int bs = (blockSize % 2 == 0) ? blockSize + 1: blockSize;
+    cv::adaptiveThreshold(inpaintImage, thresh, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, bs, 2);
+    cv::imshow(THRESH_WIN, thresh);
+
+    cv::Mat eroded;
+    cv::Mat erosionKernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(9, 9));
+    cv::erode(thresh, eroded, erosionKernel);
+    cv::imshow("erosion", eroded);
+
+    std::vector<std::vector<cv::Point>> objectContours;
+    cv::findContours(eroded, objectContours, CV_RETR_CCOMP, CV_CHAIN_APPROX_SIMPLE);
+    //cv::drawContours(inpaintImage, objectContours, -1, colorWhite);
+
+    std::vector<std::vector<cv::Point>> contoursPoly(objectContours.size());
+    std::vector<cv::Rect> boundRect(contours.size());
+
+    for (int i = 0; i < objectContours.size(); i++) {
+        cv::approxPolyDP(cv::Mat(objectContours[i]), contoursPoly[i], 3, true);
+        boundRect[i] = cv::boundingRect(cv::Mat(contoursPoly[i]));
+    }
+
+    for (cv::Rect rect: boundRect) {
+
+        if (rect.area() > MIN_AREA && rect.area() < MAX_AREA) {
+
+            std::cout << "Area: " << rect.area() << std::endl;
+
+            // Draw a rectangle around the object
+            cv::rectangle(inpaintImage, rect, colorBlack);
+        }
+    }
+
+
+    cv::imshow("yes", inpaintImage);
+
+
+    //cv::GaussianBlur(inpaintImage, inpaintImage, cv::Size(5, 5));
+
+    //cv::Mat thresh;
+    //int bs = (blockSize % 2 == 0) ? blockSize + 1: blockSize;
+    //cv::adaptiveThreshold(inpaintImage, thresh, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, 3, 1);
+
+    //cv::medianBlur(thresh, thresh, bs);
+
+    //std::vector<std::vector<cv::Point>> objectContours;
+    //cv::findContours(thresh, objectContours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
+    //cv::drawContours(inpaintImage, objectContours, -1, colorWhite);
+
+    //cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(bs, bs));
+    //cv::Mat opening;
+    //cv::morphologyEx(thresh, opening, cv::MORPH_OPEN, kernel);
+
+    //cv::blur(thresh, thresh, cv::Size(bs, bs));
+
+    /*
     // Get mask of NaN values
     cv::Mat nanMask = cv::Mat(cvImage->image != cvImage->image);
 
@@ -131,6 +233,7 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
         }
     }
 
+    /*
     std::vector<std::vector<cv::Point> > nanContours;
     cv::imshow("NAN before", nanMask);
     cv::findContours(nanMask, nanContours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
@@ -194,13 +297,12 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
         // Draw a rectangle around the object
         cv::rectangle(roiInpainted, rect, colorBlack);
     }
-
-    cv::imshow(DEPTH_WIN, roiInpainted);
-    //cv::imshow(THRESH_WINDOW, thresh);
+    */
 
     if (int key = cv::waitKey(1) != -1) {
         std::cout << key << " pressed." << std::endl;
     }
+
 
 }
 
@@ -210,16 +312,27 @@ int main(int argc, char ** argv) {
 
     ros::NodeHandle nh;
 
+    cv::namedWindow(ROI_WIN, cv::WINDOW_NORMAL);
+    cv::createTrackbar("up", ROI_WIN, &uRoi, 200);
+    cv::createTrackbar("down", ROI_WIN, &dRoi, 200);
+    cv::createTrackbar("left", ROI_WIN, &lRoi, 200);
+    cv::createTrackbar("right", ROI_WIN, &rRoi, 200);
+
+
     cv::namedWindow(RANGE_WIN, cv::WINDOW_NORMAL);
     cv::createTrackbar("min", RANGE_WIN, &minRange, 50);
     cv::createTrackbar("max", RANGE_WIN, &maxRange, 900);
 
-    cv::namedWindow(ROI_WIN, cv::WINDOW_NORMAL);
-    cv::createTrackbar("up", ROI_WIN, &uRoi, 100);
-    cv::createTrackbar("down", ROI_WIN, &dRoi, 100);
-    cv::createTrackbar("left", ROI_WIN, &lRoi, 100);
-    cv::createTrackbar("right", ROI_WIN, &rRoi, 100);
+    cv::namedWindow(NOISE_WIN, cv::WINDOW_NORMAL);
 
+    cv::namedWindow(THRESH_WIN, cv::WINDOW_NORMAL);
+    cv::createTrackbar("block size", THRESH_WIN, &blockSize, 100);
+
+    cv::namedWindow(EDGE_WIN, cv::WINDOW_NORMAL);
+    cv::createTrackbar("upper", EDGE_WIN, &upper, 500);
+    cv::createTrackbar("lower", EDGE_WIN, &lower, 500);
+
+    /*
     cv::namedWindow(DEPTH_WIN, cv::WINDOW_NORMAL);
     //cv::namedWindow(THRESH_WINDOW, cv::WINDOW_NORMAL);
 
@@ -231,8 +344,8 @@ int main(int argc, char ** argv) {
     //cv::createTrackbar("erosion", THRESH_WINDOW, &erosion, 100);
     //cv::createTrackbar("block size", THRESH_WINDOW, &blockSize, 30);
 
-
-    subscriber = nh.subscribe<sensor_msgs::Image>("/camera/depth/image", 1, depthCallback);
+    */
+    depthSubscriber = nh.subscribe<sensor_msgs::Image>("/camera/depth/image", 1, depthCallback);
 
     publisher = nh.advertise<ras_vision_recognizer::Rect>("/vision/object_rect", 1);
 

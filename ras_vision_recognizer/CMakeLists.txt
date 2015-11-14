@@ -26,6 +26,9 @@ include_directories(${catkin_INCLUDE_DIRS})
 add_executable(depth_detector src/detectors/depth_detector.cpp)
 target_link_libraries(depth_detector ${OpenCV_LIBS} ${Boost_LIBRARIES} ${catkin_LIBRARIES})
 
+add_executable(depth_test src/detectors/depth_test.cpp)
+target_link_libraries(depth_test ${OpenCV_LIBS} ${Boost_LIBRARIES} ${catkin_LIBRARIES})
+
 add_executable(color_recognizer src/recognizers/color_recognizer.cpp)
 target_link_libraries(color_recognizer ${OpenCV_LIBS} ${Boost_LIBRARIES} ${catkin_LIBRARIES})
 
