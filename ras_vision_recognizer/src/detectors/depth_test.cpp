@@ -48,6 +48,7 @@ static const std::string WIN_EDGE = "edge";
 static const std::string WIN_NOISE = "no noise";
 static const std::string WIN_OPEN = "opening";
 static const std::string WIN_DETECT = "detection";
+static const std::string WIN_HSV = "hsv";
 
 // Global variables
 ros::Subscriber depthSubscriber;
@@ -67,6 +68,7 @@ int kSize = 3;
 int iterations = 10;
 int thresh = 3;
 int minSaturation = 130;
+int hsvSaturation = 100;
 
 // Test
 bool enableSubtraction = false;
@@ -151,13 +153,13 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
         // Background subtraction
         cv::Mat foregroundImage;
         cv::subtract(backgroundImage, rangeImage, foregroundImage);
-        if (visualization) cv::imshow("foreground", foregroundImage);
+        //if (visualization) cv::imshow("foreground", foregroundImage);
 
         // Thresholding
         cv::Mat threshold;
         //cv::adaptiveThreshold(foregroundImage, threshold, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, CV_THRESH_BINARY, 3, 2);
         cv::threshold(foregroundImage, threshold, thresh, 255, cv::THRESH_BINARY);
-        if (visualization) cv::imshow(WIN_THRESH, threshold);
+        //if (visualization) cv::imshow(WIN_THRESH, threshold);
 
         // Morphological opening (remove noise)
         cv::Mat opening;
@@ -218,7 +220,7 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
                     }
                 }
             // Possible debris
-            } else if (area > MIN_DEBRIS_AREA && area < MAX_DEBRIS_AREA) {
+            /*} else if (area > MIN_DEBRIS_AREA && area < MAX_DEBRIS_AREA) {
 
                 cv::Rect debrisRect = cv::boundingRect(contour);
 
@@ -226,16 +228,37 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
                     cv::Rect realRect = convertRect(debrisRect);
                     cv::rectangle(colorImage, realRect, colorRed);
                 }
-            // Wall
+            // Wall*/
             } else {
+                cv::Mat colorRoi = colorImage(roi);
 
+                cv::Mat wallOrObject;
+                cv::bitwise_and(colorRoi, colorRoi, wallOrObject, opening);
+
+                cv::Mat hsvImage;
+                cv::cvtColor(wallOrObject, hsvImage, cv::COLOR_BGR2HSV);
+
+                std::vector<cv::Mat> hsvPlanes;
+                cv::split(hsvImage, hsvPlanes);
+
+                cv::Mat satImage = hsvPlanes[1];
+
+                cv::Mat satThresh;
+                cv::inRange(satImage, hsvSaturation, 255, satThresh);
+
+                cv::Mat satOpening;
+                cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(kSize, kSize));
+                cv::morphologyEx(satThresh, satOpening, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), iterations);
+
+
+                cv::imshow(WIN_HSV, satOpening);
             }
         }
     }
 
     cv::imshow(WIN_DETECT, colorImage);
 
-    int key = cv::waitKey(120);
+    int key = cv::waitKey(60);
 
     if (key == 10) {
         std::cout << "Background image saved." << std::endl;
@@ -280,6 +303,9 @@ int main(int argc, char ** argv) {
 
         cv::namedWindow(WIN_THRESH, cv::WINDOW_NORMAL);
         cv::createTrackbar("thresh", WIN_THRESH, &thresh, 20);
+
+        cv::namedWindow(WIN_HSV, cv::WINDOW_NORMAL);
+        cv::createTrackbar("saturation", WIN_HSV, &hsvSaturation, 255);
     }
 
     cv::namedWindow(WIN_DETECT, cv::WINDOW_NORMAL);
