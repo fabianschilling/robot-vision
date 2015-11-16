@@ -235,7 +235,7 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
 
     cv::imshow(WIN_DETECT, colorImage);
 
-    int key = cv::waitKey(60);
+    int key = cv::waitKey(120);
 
     if (key == 10) {
         std::cout << "Background image saved." << std::endl;
