@@ -72,7 +72,7 @@ int hsvSaturation = 100;
 
 // Test
 bool enableSubtraction = false;
-cv::Mat backgroundImage;
+cv::Mat bgDepthImage;
 cv::Mat colorImage;
 static const std::string FILENAME = "/home/fabian/catkin_ws/src/ras_vision/background.jpg";
 
@@ -130,130 +130,101 @@ void colorCallback(const sensor_msgs::Image::ConstPtr& message) {
     colorImage = cv_bridge::toCvCopy(message, sensor_msgs::image_encodings::BGR8)->image;
 }
 
+void publishMessage(const cv::Rect rect) {
+
+    ras_vision_recognizer::Rect message;
+    message.x = rect.x;
+    message.y = rect.y;
+    message.width = rect.width;
+    message.height = rect.height;
+    publisher.publish(message);
+}
+
 void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
 
     // Convert from ROS to OpenCV image
     cv::Mat depthImage = cv_bridge::toCvCopy(message, sensor_msgs::image_encodings::TYPE_32FC1)->image;
 
     // Crop ROI and visualize
-    cv::Rect roi = cv::Rect(lRoi, uRoi, depthImage.cols - (lRoi + rRoi), depthImage.rows - (uRoi + dRoi));
-    cv::Mat roiImage = depthImage(roi);
-    cv::rectangle(depthImage, roi, colorWhite);
+    cv::Rect roiRect = cv::Rect(lRoi, uRoi, depthImage.cols - (lRoi + rRoi), depthImage.rows - (uRoi + dRoi));
+    cv::Mat roiDepthImage = depthImage(roiRect);
+    cv::Mat roiColorImage = colorImage(roiRect);
+    cv::rectangle(depthImage, roiRect, colorWhite);
     if (visualization) cv::imshow(WIN_ROI, depthImage);
 
     // Get mask of NaN values
-    cv::Mat nanMask = cv::Mat(roiImage != roiImage);
+    cv::Mat nanDepthMask = cv::Mat(roiDepthImage != roiDepthImage);
 
     // Normalize image
-    cv::Mat rangeImage = normalize(roiImage);
-    if (visualization) cv::imshow(WIN_RANGE, rangeImage);
+    cv::Mat rangeDepthImage = normalize(roiDepthImage);
+    if (visualization) cv::imshow(WIN_RANGE, rangeDepthImage);
 
     if (enableSubtraction) {
 
         // Background subtraction
-        cv::Mat foregroundImage;
-        cv::subtract(backgroundImage, rangeImage, foregroundImage);
+        cv::Mat fgDepthImage;
+        cv::subtract(bgDepthImage, rangeDepthImage, fgDepthImage);
         //if (visualization) cv::imshow("foreground", foregroundImage);
 
         // Thresholding
-        cv::Mat threshold;
+        cv::Mat depthThreshold;
         //cv::adaptiveThreshold(foregroundImage, threshold, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, CV_THRESH_BINARY, 3, 2);
-        cv::threshold(foregroundImage, threshold, thresh, 255, cv::THRESH_BINARY);
+        cv::threshold(fgDepthImage, depthThreshold, thresh, 255, cv::THRESH_BINARY);
         //if (visualization) cv::imshow(WIN_THRESH, threshold);
 
         // Morphological opening (remove noise)
-        cv::Mat opening;
+        cv::Mat depthOpening;
         cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(kSize, kSize));
-        cv::morphologyEx(threshold, opening, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), iterations);
-        if (visualization) cv::imshow(WIN_OPEN, opening);
+        cv::morphologyEx(depthThreshold, depthOpening, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), iterations);
+        if (visualization) cv::imshow(WIN_OPEN, depthOpening);
 
-        // Find object, debris and wall contours
+        cv::Mat colorThreshold;
+        cv::bitwise_and(roiColorImage, roiColorImage, colorThreshold, depthOpening);
+
+        //cv::imshow("hello", colorThreshold);
+
+        cv::Mat hsvImage;
+        cv::cvtColor(colorThreshold, hsvImage, cv::COLOR_BGR2HSV);
+
+        std::vector<cv::Mat> hsvPlanes;
+        cv::split(hsvImage, hsvPlanes);
+
+        cv::Mat satImage = hsvPlanes[1]; // get saturation channel
+
+        cv::Mat satThresh;
+        cv::inRange(satImage, hsvSaturation, 255, satThresh);
+
+        cv::Mat satOpening;
+        cv::morphologyEx(satThresh, satOpening, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), iterations);
+        cv::imshow(WIN_HSV, satOpening);
+
         std::vector<std::vector<cv::Point> > contours;
-        cv::findContours(opening, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+        cv::findContours(satOpening, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
 
         for (std::vector<cv::Point> contour: contours) {
 
-            double area = cv::contourArea(contour);
+            cv::Rect bounding = cv::boundingRect(contour);
 
-            // Possible object
-            if (area > MIN_AREA && area < MAX_AREA) {
+            if (bounding.area() > 500 && bounding.area() < 8000) {
 
-                cv::Rect rect = cv::boundingRect(contour);
+                cv::Rect realRect = convertRect(bounding);
 
-                double aspectRatio = (double) rect.width / rect.height;
+                cv::rectangle(colorImage, realRect, colorBlue);
 
-                if (aspectRatio > MIN_ASPECT && aspectRatio < MAX_ASPECT) {
+                cv::Rect pubRect;
+                pubRect.x = realRect.x - (0.1 * realRect.width);
+                pubRect.y = realRect.y - (0.1 * realRect.height);
+                pubRect.width = realRect.width * 1.2;
+                pubRect.height = realRect.height * 1.2;
 
-                    cv::Rect realRect = convertRect(rect);
+                cv::rectangle(colorImage, pubRect, colorGreen);
 
-                    cv::Mat objectRoi = colorImage(realRect);
-
-                    cv::Mat hsvImage;
-                    cv::cvtColor(objectRoi, hsvImage, cv::COLOR_BGR2HSV);
-
-                    std::vector<cv::Mat> hsvPlanes;
-
-                    cv::split(hsvImage, hsvPlanes);
-
-                    double minSat;
-                    double maxSat;
-                    cv::minMaxLoc(hsvPlanes[1], &minSat, &maxSat);
-
-                    // Object detected
-                    if (maxSat > minSaturation) {
-
-                        //cv::rectangle(colorImage, realRect, colorGreen);
-                        cv::Rect bounding;
-                        bounding.x = realRect.x - (int) (0.05 * realRect.width);
-                        bounding.y = realRect.y - (int) (0.1 * realRect.height);
-                        bounding.width = (int) (1.1 * realRect.width);
-                        bounding.height = (int) (1.3 * realRect.height);
-                        cv::rectangle(colorImage, bounding, colorBlue);
-
-                        ras_vision_recognizer::Rect message;
-                        message.x = bounding.x;
-                        message.y = bounding.y;
-                        message.width = bounding.width;
-                        message.height = bounding.height;
-                        publisher.publish(message);
-
-                    }
-                }
-            // Possible debris
-            /*} else if (area > MIN_DEBRIS_AREA && area < MAX_DEBRIS_AREA) {
-
-                cv::Rect debrisRect = cv::boundingRect(contour);
-
-                if (debrisRect.x != 1 && debrisRect.y != 1) {
-                    cv::Rect realRect = convertRect(debrisRect);
-                    cv::rectangle(colorImage, realRect, colorRed);
-                }
-            // Wall*/
-            } else {
-                cv::Mat colorRoi = colorImage(roi);
-
-                cv::Mat wallOrObject;
-                cv::bitwise_and(colorRoi, colorRoi, wallOrObject, opening);
-
-                cv::Mat hsvImage;
-                cv::cvtColor(wallOrObject, hsvImage, cv::COLOR_BGR2HSV);
-
-                std::vector<cv::Mat> hsvPlanes;
-                cv::split(hsvImage, hsvPlanes);
-
-                cv::Mat satImage = hsvPlanes[1];
-
-                cv::Mat satThresh;
-                cv::inRange(satImage, hsvSaturation, 255, satThresh);
-
-                cv::Mat satOpening;
-                cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(kSize, kSize));
-                cv::morphologyEx(satThresh, satOpening, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), iterations);
-
-
-                cv::imshow(WIN_HSV, satOpening);
+                publishMessage(pubRect);
             }
+
+            std::cout << "Area: " << bounding.area() << std::endl;
         }
+
     }
 
     cv::imshow(WIN_DETECT, colorImage);
@@ -264,9 +235,9 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
         std::cout << "Background image saved." << std::endl;
         enableSubtraction = true;
         cv::Mat inpaintImage;
-        cv::inpaint(rangeImage, nanMask, inpaintImage, -1, cv::INPAINT_TELEA);
-        backgroundImage = inpaintImage;
-        cv::imwrite("/home/fabian/catkin_ws/src/ras_vision/background.jpg", backgroundImage);
+        cv::inpaint(rangeDepthImage, nanDepthMask, inpaintImage, -1, cv::INPAINT_TELEA);
+        bgDepthImage = inpaintImage;
+        cv::imwrite("/home/fabian/catkin_ws/src/ras_vision/background.jpg", bgDepthImage);
     }
 
 }
@@ -277,9 +248,9 @@ int main(int argc, char ** argv) {
 
     ros::NodeHandle nh;
 
-    backgroundImage = cv::imread(FILENAME, CV_LOAD_IMAGE_GRAYSCALE);
+    bgDepthImage = cv::imread(FILENAME, CV_LOAD_IMAGE_GRAYSCALE);
 
-    if (!backgroundImage.data) {
+    if (!bgDepthImage.data) {
         std::cout << "Failed to load background image." << std::endl;
     } else {
         std::cout << "Background image loaded." << std::endl;
