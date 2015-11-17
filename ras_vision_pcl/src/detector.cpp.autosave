@@ -97,7 +97,8 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
     std::cout << "Clusters found: " << clusterIndices.size() << std::endl;
 
     for (std::vector<pcl::PointIndices>::const_iterator it = clusterIndices.begin(); it != clusterIndices.end(); ++it) {
-
+        PointCloud::Ptr cluster(new PointCloud);
+        
     }
 
     publisher.publish(cloudDownsampled);
