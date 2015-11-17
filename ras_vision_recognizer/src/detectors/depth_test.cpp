@@ -68,10 +68,10 @@ int kSize = 3;
 int iterations = 10;
 int thresh = 3;
 int minSaturation = 130;
-int hsvSaturation = 100;
+int hsvSaturation = 90;
 
 // Test
-bool enableSubtraction = false;
+bool enableSubtraction = true;
 cv::Mat bgDepthImage;
 cv::Mat colorImage;
 static const std::string FILENAME = "/home/fabian/catkin_ws/src/ras_vision/background.jpg";
@@ -178,31 +178,33 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
         cv::morphologyEx(depthThreshold, depthOpening, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), iterations);
         if (visualization) cv::imshow(WIN_OPEN, depthOpening);
 
+        // Get the color image without the floor
         cv::Mat colorThreshold;
         cv::bitwise_and(roiColorImage, roiColorImage, colorThreshold, depthOpening);
 
-        //cv::imshow("hello", colorThreshold);
-
+        // Convert to HSV
         cv::Mat hsvImage;
         cv::cvtColor(colorThreshold, hsvImage, cv::COLOR_BGR2HSV);
-
         std::vector<cv::Mat> hsvPlanes;
         cv::split(hsvImage, hsvPlanes);
-
         cv::Mat satImage = hsvPlanes[1]; // get saturation channel
 
+        // Threshold at a high saturation to separate the objects
         cv::Mat satThresh;
         cv::inRange(satImage, hsvSaturation, 255, satThresh);
 
+        // Remove noise
         cv::Mat satOpening;
         cv::morphologyEx(satThresh, satOpening, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), iterations);
-        cv::imshow(WIN_HSV, satOpening);
+        if (visualization) cv::imshow(WIN_HSV, satOpening);
 
+        // Find object contours
         std::vector<std::vector<cv::Point> > contours;
         cv::findContours(satOpening, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
 
         for (std::vector<cv::Point> contour: contours) {
 
+            // Calculate a bounding rect of the object contour
             cv::Rect bounding = cv::boundingRect(contour);
 
             if (bounding.area() > 500 && bounding.area() < 8000) {
@@ -211,6 +213,7 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
 
                 cv::rectangle(colorImage, realRect, colorBlue);
 
+                // Add some margin of error
                 cv::Rect pubRect;
                 pubRect.x = realRect.x - (0.1 * realRect.width);
                 pubRect.y = realRect.y - (0.1 * realRect.height);
@@ -221,10 +224,7 @@ void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
 
                 publishMessage(pubRect);
             }
-
-            std::cout << "Area: " << bounding.area() << std::endl;
         }
-
     }
 
     cv::imshow(WIN_DETECT, colorImage);
@@ -271,9 +271,6 @@ int main(int argc, char ** argv) {
         cv::namedWindow(WIN_OPEN, cv::WINDOW_NORMAL);
         cv::createTrackbar("kernel", WIN_OPEN, &kSize, 20);
         cv::createTrackbar("iternations", WIN_OPEN, &iterations, 20);
-
-        cv::namedWindow(WIN_THRESH, cv::WINDOW_NORMAL);
-        cv::createTrackbar("thresh", WIN_THRESH, &thresh, 20);
 
         cv::namedWindow(WIN_HSV, cv::WINDOW_NORMAL);
         cv::createTrackbar("saturation", WIN_HSV, &hsvSaturation, 255);
