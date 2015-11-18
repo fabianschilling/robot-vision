@@ -1,52 +1,49 @@
 #include <ros/ros.h>
 // PCL specific includes
 #include <sensor_msgs/PointCloud2.h>
+#include <pcl_ros/point_cloud.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
 #include <pcl/filters/voxel_grid.h>
 
-ros::Publisher pub;
+ros::Publisher cloudPublisher;
+ros::Subscriber subscriber;
 
-void 
-cloud_cb (const sensor_msgs::PointCloud2ConstPtr& cloud_msg)
-{
-  // Container for original & filtered data
-  pcl::PCLPointCloud2* cloud = new pcl::PCLPointCloud2; 
-  pcl::PCLPointCloud2ConstPtr cloudPtr(cloud);
-  pcl::PCLPointCloud2 cloud_filtered;
+void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud) {
 
-  // Convert to PCL data type
-  pcl_conversions::toPCL(*cloud_msg, *cloud);
+    size_t pointsBefore = inputCloud->points.size();
 
-  // Perform the actual filtering
-  pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
-  sor.setInputCloud (cloudPtr);
-  sor.setLeafSize (0.1, 0.1, 0.1);
-  sor.filter (cloud_filtered);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr voxelCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::VoxelGrid<pcl::PointXYZRGB> downsample;
+    downsample.setInputCloud(inputCloud);
+    //downsample.setLeafSize(0.1f, 0.1f, 0.1f);
+    downsample.setLeafSize(0.01f, 0.01f, 0.01f);
+    downsample.filter(*voxelCloud);
 
-  // Convert to ROS data type
-  sensor_msgs::PointCloud2 output;
-  pcl_conversions::fromPCL(cloud_filtered, output);
+    size_t pointsAfter = voxelCloud->points.size();
 
-  // Publish the data
-  pub.publish (output);
+    double pointsLeft = (100.0f * pointsAfter / pointsBefore);
+
+    std::cout << "Downsampled: " << pointsBefore << " -> " << pointsAfter << " (" << pointsLeft << "% left)" << std::endl;
+
+    cloudPublisher.publish(voxelCloud);
 }
 
-int
-main (int argc, char** argv)
-{
-  // Initialize ROS
-  ros::init (argc, argv, "example");
+int main (int argc, char** argv) {
+
+  ros::init (argc, argv, "voxel_grid");
   ros::NodeHandle nh;
 
-  // Create a ROS subscriber for the input point cloud
-  ros::Subscriber sub = nh.subscribe ("/camera/depth_registered/points", 1, cloud_cb);
+  subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> >("/camera/depth_registered/points", 1, cloudCallback);
+  cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/voxel_grid", 1);
 
-  // Create a ROS publisher for the output point cloud
-  pub = nh.advertise<sensor_msgs::PointCloud2> ("/voxel_grid", 1);
+  ros::Rate r(10); // 10Hz
 
-  // Spin
-  ros::spin ();
+  while (ros::ok()) {
+      ros::spinOnce();
+      r.sleep();
+  }
+
 }

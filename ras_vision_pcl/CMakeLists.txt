@@ -6,6 +6,7 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
   roscpp
   sensor_msgs
+  geometry_msgs
   roslaunch
 )
 
@@ -22,8 +23,14 @@ target_link_libraries(example ${catkin_LIBRARIES})
 add_executable(voxel_grid src/voxel_grid.cpp)
 target_link_libraries(voxel_grid ${catkin_LIBRARIES})
 
-add_executable(segmentation src/segmentation.cpp)
-target_link_libraries(segmentation ${catkin_LIBRARIES})
+add_executable(plane_segmentation src/plane_segmentation.cpp)
+target_link_libraries(plane_segmentation ${catkin_LIBRARIES})
 
-add_executable(detector src/detector.cpp)
-target_link_libraries(detector ${catkin_LIBRARIES})
+add_executable(euclidean_clustering src/euclidean_clustering.cpp)
+target_link_libraries(euclidean_clustering ${catkin_LIBRARIES})
+
+add_executable(rotation src/rotation.cpp)
+target_link_libraries(rotation ${catkin_LIBRARIES})
+
+add_executable(multiplane_segmentation src/multiplane_segmentation.cpp)
+target_link_libraries(multiplane_segmentation ${catkin_LIBRARIES})

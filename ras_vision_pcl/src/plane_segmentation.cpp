@@ -12,7 +12,7 @@
 ros::Publisher pub;
 
 void
-cloud_cb (const sensor_msgs::PointCloud2ConstPtr& input)
+cloudCallback (const sensor_msgs::PointCloud2ConstPtr& input)
 {
   // Convert the sensor_msgs/PointCloud2 data to pcl/PointCloud
   pcl::PointCloud<pcl::PointXYZ> cloud;
@@ -46,7 +46,7 @@ main (int argc, char** argv)
   ros::NodeHandle nh;
 
   // Create a ROS subscriber for the input point cloud
-  ros::Subscriber sub = nh.subscribe ("/camera/depth/points", 1, cloud_cb);
+  ros::Subscriber sub = nh.subscribe ("/camera/depth/points", 1, cloudCallback);
 
   // Create a ROS publisher for the output point cloud
   pub = nh.advertise<pcl_msgs::ModelCoefficients> ("/coefficients", 1);
