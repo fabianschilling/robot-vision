@@ -29,8 +29,14 @@ target_link_libraries(plane_segmentation ${catkin_LIBRARIES})
 add_executable(euclidean_clustering src/euclidean_clustering.cpp)
 target_link_libraries(euclidean_clustering ${catkin_LIBRARIES})
 
-add_executable(rotation src/rotation.cpp)
-target_link_libraries(rotation ${catkin_LIBRARIES})
+add_executable(transformation src/transformation.cpp)
+target_link_libraries(transformation ${catkin_LIBRARIES})
 
 add_executable(multiplane_segmentation src/multiplane_segmentation.cpp)
 target_link_libraries(multiplane_segmentation ${catkin_LIBRARIES})
+
+add_executable(ransac_model src/ransac_model.cpp)
+target_link_libraries(ransac_model ${catkin_LIBRARIES})
+
+add_executable(detector src/detector.cpp)
+target_link_libraries(detector ${catkin_LIBRARIES})

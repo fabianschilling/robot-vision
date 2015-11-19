@@ -27,9 +27,10 @@ class Visualizer:
         rospy.init_node(self.node_name, anonymous=True)
 
         self.image = None
+        self.point = None
 
         self.subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.color_callback, queue_size=1)
-        self.subscriber = rospy.Subscriber('/point', Point, self.point_callback, queue_size=1)
+        self.subscriber = rospy.Subscriber('/vision/object_rect', Point, self.point_callback, queue_size=1)
 
         self.publisher = rospy.Publisher('/object/color', UInt8, queue_size=1)
 
@@ -44,28 +45,25 @@ class Visualizer:
 
     def point_callback(self, point):
 
-        if self.image is None:
-            return
-
-        px = int(point.x)
-        py = int(point.y)
-
-        #s = cv2.getTrackbarPos('size', 'visualization')
-
-        s = int(38.5 / point.z)
-
-        cv2.rectangle(self.image, (px - s / 2, py - s / 2), (px + s / 2, py + s / 2), (255, 255, 255))
+        self.point = point
+        
         #cv2.circle(self.image, (px-s/2, py), 15, (255, 255, 255))
-
-        cv2.imshow('visualization', self.image)
-
-        if cv2.waitKey(1) == 27: # ESC
-            shutdown()
 
     def color_callback(self, data):
         
         # Convert from ROS image to OpenCV image
         self.image = self.bridge.imgmsg_to_cv2(data, 'bgr8')
+
+        if self.point is not None:
+            px = int(self.point.x)
+            py = int(self.point.y)
+            s = int(38.5 / self.point.z)
+            cv2.rectangle(self.image, (px - s / 2, py - s / 2), (px + s / 2, py + s / 2), (0, 0, 0))
+
+        cv2.imshow('visualization', self.image)
+
+        if cv2.waitKey(1) == 27: # ESC
+            shutdown()
 
 def main():
     Visualizer()

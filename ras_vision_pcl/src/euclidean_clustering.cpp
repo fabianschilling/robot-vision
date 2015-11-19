@@ -35,6 +35,22 @@ const float fy = 574.0;
 const float cx = 319.5;
 const float cy = 239.5;
 
+const double a = 0.0099;
+const double b = -0.8687;
+const double c = -0.4952;
+const double d = 0.2582;
+
+double distanceToPlane(Eigen::Vector4f centroid) {
+    double x = centroid[0];
+    double y = centroid[1];
+    double z = centroid[2];
+
+    double distTop = std::abs(a * x + b * y + c * z + d);
+    double distBot = std::sqrt(a * a + b * b + c * c);
+
+    return distTop / distBot;
+}
+
 void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud) {
 
     // Filter cloud based on z-value
@@ -105,12 +121,14 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
     pcl::EuclideanClusterExtraction<pcl::PointXYZRGB> extract;
     extract.setClusterTolerance(0.04); // 4cm
     extract.setMinClusterSize(10);
-    extract.setMaxClusterSize(100);
+    extract.setMaxClusterSize(200);
     extract.setSearchMethod(tree);
     extract.setInputCloud(cloudDownsampled);
     extract.extract(cloudIndices);
 
-    std::cout << "Clusters found: " << cloudIndices.size() << std::endl;
+    if (!cloudIndices.empty()) {
+        std::cout << "Clusters found: " << cloudIndices.size() << std::endl;
+    }
 
     for (std::vector<pcl::PointIndices>::const_iterator it = cloudIndices.begin (); it != cloudIndices.end(); ++it) {
 
@@ -122,6 +140,18 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
         Eigen::Vector4f centroid;
         pcl::compute3DCentroid(*cluster, centroid);
+
+
+        double distanceToGround = distanceToPlane(centroid);
+
+        if (distanceToGround > 0.05) {
+            continue;
+        }
+
+        std::cout << "Points: " << cluster->points.size() << std::endl;
+
+        std::cout << "Distance to ground: " << distanceToPlane(centroid) << std::endl;
+
         float x = centroid[0];
         float y = centroid[1];
         float z = centroid[2];
@@ -129,7 +159,6 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
         int px = (int) (fx * x/z + cx);
         int py = (int) (fy * y/z + cy);
 
-        //std::cout << "Points: " << cluster->points.size() << std::endl;
         std::cout << "Centroid: (" << x << ", " << y << ", " << z << ")" << std::endl;
         std::cout << "Pixels: (" << px << ", " << py << ")" << std::endl;
 
@@ -175,7 +204,7 @@ int main(int argc, char** argv) {
 
     subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> >("/camera/depth_registered/points", 1, cloudCallback);
     cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/pointcloud", 1);
-    pointPublisher = nh.advertise<geometry_msgs::Point>("/point", 1);
+    pointPublisher = nh.advertise<geometry_msgs::Point>("/vision/object_rect", 1);
 
 
     ros::Rate r(1); //1Hz
