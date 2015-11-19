@@ -14,6 +14,7 @@
 // PCL Common
 #include <pcl/common/transforms.h>
 #include <pcl/common/centroid.h>
+#include <pcl/common/common.h>
 
 // PCL Filters
 #include <pcl/filters/voxel_grid.h>
@@ -49,7 +50,8 @@ double const cy = 239.5;
 double const leafSize = 0.005;
 double const minZ = 0.0; // 0m
 double const maxZ = 1.0; // 1m
-double const minY = -0.15; // 15cm
+double const minY = -0.30; // 30cm (may want the wall information too!
+//double const minY = -0.15; // 15cm
 double const maxY = -0.01; // 1cm
 
 double distanceToPlane(Eigen::Vector4f centroid) {
@@ -197,7 +199,7 @@ std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> computeClusters(pcl::PointCl
     pcl::EuclideanClusterExtraction<pcl::PointXYZRGB> extract;
     extract.setClusterTolerance(0.04); // 4cm
     extract.setMinClusterSize(50);
-    extract.setMaxClusterSize(200);
+    extract.setMaxClusterSize(1000);
     extract.setSearchMethod(tree);
     extract.setInputCloud(input);
     extract.extract(clusterIndices);
@@ -246,7 +248,29 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
     for (int i = 0; i < clusters.size(); ++i) {
 
-        cloudPublisher.publish(clusters[i]);
+        std::cout << "Cluster " << (i + 1) << std::endl;
+
+        std::cout << "Size:"  << clusters[i]->points.size() << std::endl;
+
+        Eigen::Vector4f minPoint, maxPoint;
+        pcl::getMinMax3D(*clusters[i], minPoint, maxPoint);
+        std::cout << "Min y: " << minPoint[1] << std::endl;
+        std::cout << "Max y: " << maxPoint[1] << std::endl;
+
+        Eigen::Vector4f centroid;
+        pcl::compute3DCentroid(*clusters[i], centroid);
+
+        std::cout << "Centroid y: " << centroid[1] << std::endl;
+
+        if (minPoint[1] > -0.07 && minPoint[1] < -0.03) {
+            std::cout << "Object" << std::endl;
+        } else if (minPoint[1] < -0.07 && minPoint[1] > -0.15) {
+            std::cout << "Debris" << std::endl;
+        } else {
+            std::cout << "Wall or noise?" << std::endl;
+        }
+
+        //cloudPublisher.publish(clusters[i]);
     }
 
     cloudPublisher.publish(cloudPassthroughY);
