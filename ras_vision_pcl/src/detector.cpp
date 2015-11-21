@@ -10,6 +10,7 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <pcl/point_types_conversion.h>
 
 // PCL Common
 #include <pcl/common/transforms.h>
@@ -33,13 +34,14 @@
 #include <pcl/segmentation/extract_clusters.h>
 
 ros::Publisher cloudPublisher;
+ros::Publisher pointPublisher;
 ros::Subscriber subscriber;
 
 // These need to be adjusted every time the plane changes
-double const a = 0.00477479;
-double const b = -0.878083;
-double const c = -0.478483;
-double const d = 0.256502;
+double const a = -0.00813355;
+double const b = -0.860016;
+double const c = -0.510203;
+double const d = 0.254902;
 
 // Intrinsic camera parameters
 double const fx = 574.0;
@@ -157,10 +159,10 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
     segmentation.setMaxIterations(100);
     segmentation.setDistanceThreshold(0.02);
 
-    int numPoints = (int) input->points.size();
+    //int numPoints = (int) input->points.size();
 
     // While still planes in the scene
-    while (input->points.size() > 0.3 * numPoints) {
+    while (input->points.size() > 1000) {
 
         segmentation.setInputCloud(input);
         segmentation.segment(*inliers, *coefficients);
@@ -220,6 +222,32 @@ std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> computeClusters(pcl::PointCl
     return clusters;
 }
 
+pcl::PointXYZHSV getCloudAverage(pcl::PointCloud<pcl::PointXYZHSV>::Ptr input) {
+
+    pcl::PointXYZHSV avg;
+    avg.x = 0; avg.y = 0; avg.z = 0; avg.h = 0; avg.s = 0; avg.v = 0;
+
+    for(size_t i = 0; i < input->points.size(); i++) {
+        if(!isnan(input->points[i].x) && !isnan(input->points[i].y) && !isnan(input->points[i].z)) {
+            avg.x += input->points[i].x;
+            avg.y += input->points[i].y;
+            avg.z += input->points[i].z;
+            avg.h += input->points[i].h;
+            avg.s += input->points[i].s;
+            avg.v += input->points[i].v;
+        }
+    }
+
+    avg.x /= input->points.size();
+    avg.y /= input->points.size();
+    avg.z /= input->points.size();
+    avg.h /= input->points.size();
+    avg.s /= input->points.size();
+    avg.v /= input->points.size();
+
+    return avg;
+}
+
 void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud) {
 
     // Filter out everything farther than 1m
@@ -238,11 +266,11 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
     //pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudUntransformed = untransform(cloudPassthroughY);
 
     // Filter out planes
-    //pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudFiltered = filterPlanes(cloudPassthroughY);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudFiltered = filterPlanes(cloudPassthroughY);
 
     //std::cout << "Cloud size: " << cloudFiltered->points.size() << std::endl;
 
-    std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> clusters = computeClusters(cloudPassthroughY);
+    std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> clusters = computeClusters(cloudFiltered);
 
     std::cout << "Clusters found: " << clusters.size() << std::endl;
 
@@ -257,13 +285,61 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
         std::cout << "Min y: " << minPoint[1] << std::endl;
         std::cout << "Max y: " << maxPoint[1] << std::endl;
 
-        Eigen::Vector4f centroid;
-        pcl::compute3DCentroid(*clusters[i], centroid);
+        double width = std::abs(std::abs(minPoint[0]) - std::abs(maxPoint[0]));
+        double height = std::abs(std::abs(minPoint[1]) - std::abs(maxPoint[1]));
 
-        std::cout << "Centroid y: " << centroid[1] << std::endl;
+        std::cout << "Width: " << width << std::endl;
+        std::cout << "Height: " << height << std::endl;
 
-        if (minPoint[1] > -0.07 && minPoint[1] < -0.03) {
-            std::cout << "Object" << std::endl;
+        //Eigen::Vector4f centroid;
+        //pcl::compute3DCentroid(*clusters[i], centroid);
+
+        //std::cout << "Centroid y: " << centroid[1] << std::endl;
+
+        if (minPoint[1] > -0.07 && minPoint[1] < -0.01) {
+
+
+
+            pcl::PointCloud<pcl::PointXYZHSV>::Ptr hsvCluster(new pcl::PointCloud<pcl::PointXYZHSV>);
+
+            pcl::PointCloudXYZRGBtoXYZHSV(*clusters[i], *hsvCluster);
+
+            //computeSaturation(hsvCluster);
+
+            pcl::PointXYZHSV avg = getCloudAverage(hsvCluster);
+
+            std::cout << "(" << avg.h << ", " << avg.s << ", " << avg.v << ")" << std::endl;
+
+            if (avg.s > 0.4) {
+
+                std::cout << "Object" << std::endl;
+
+
+                pcl::PointCloud<pcl::PointXYZRGB>::Ptr untransformed = untransform(clusters[i]);
+
+                Eigen::Vector4f centroid;
+                pcl::compute3DCentroid(*untransformed, centroid);
+
+                float x = centroid[0];
+                float y = centroid[1];
+                float z = centroid[2];
+
+                int px = (int) (fx * x/z + cx);
+                int py = (int) (fy * y/z + cy);
+
+                //std::cout << "Centroid: (" << x << ", " << y << ", " << z << ")" << std::endl;
+                //std::cout << "Pixels: (" << px << ", " << py << ")" << std::endl;
+
+                geometry_msgs::Point point;
+                point.x = px;
+                point.y = py;
+                point.z = z;
+                pointPublisher.publish(point);
+
+
+            }
+
+
         } else if (minPoint[1] < -0.07 && minPoint[1] > -0.15) {
             std::cout << "Debris" << std::endl;
         } else {
@@ -273,7 +349,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
         //cloudPublisher.publish(clusters[i]);
     }
 
-    cloudPublisher.publish(cloudPassthroughY);
+    cloudPublisher.publish(cloudFiltered);
 }
 
 int main (int argc, char** argv) {
@@ -283,6 +359,7 @@ int main (int argc, char** argv) {
 
   subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/camera/depth_registered/points", 1, cloudCallback);
   cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/voxel_grid", 1);
+  pointPublisher = nh.advertise<geometry_msgs::Point>("/vision/object_rect", 1);
 
   ros::Rate r(1); // 10Hz
 
