@@ -8,14 +8,15 @@
 #include <pcl/common/transforms.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
+#include <Eigen/Geometry>
 
 ros::Publisher cloudPublisher;
 ros::Subscriber subscriber;
 
-double const a = 0.014390401542186737;
-double const b = -0.8641400933265686;
-double const c = -0.5030454993247986;
-double const d = 0.2583202123641968;
+double const a = -0.00664897;
+double const b = -0.882463;
+double const c = -0.470334;
+double const d = 0.256906;
 double const leafSize = 0.005;
 double const minZ = 0.0; // 0m
 double const maxZ = 1.0; // 1m
@@ -60,42 +61,20 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr passThroughY(pcl::PointCloud<pcl::PointXY
     return output;
 }
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr transform(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr transform(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input, Eigen::Matrix4f transformation) {
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
-
-    // Rotation around x-axis
-    Eigen::Matrix4f transformation = Eigen::Matrix4f::Identity();
-    double theta = -std::acos(std::abs(b) / (std::sqrt(a * a + b * b + c * c)));
-    transformation(1, 1) = std::cos(theta);
-    transformation(1, 2) = -std::sin(theta);
-    transformation(2, 1) = std::sin(theta);
-    transformation(2, 2) = std::cos(theta);
-
-    // Translation on y-axis
-    transformation(1, 3) = -d; // 1 meter translation on y axis
 
     pcl::transformPointCloud(*input, *output, transformation);
 
     return output;
 }
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr untransform(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr untransform(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input, Eigen::Matrix4f inverse) {
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
 
-    // Rotation around x-axis
-    Eigen::Matrix4f transformation = Eigen::Matrix4f::Identity();
-    double theta = std::acos(std::abs(b) / (std::sqrt(a * a + b * b + c * c)));
-    transformation(1, 1) = std::cos(theta);
-    transformation(1, 2) = -std::sin(theta);
-    transformation(2, 1) = std::sin(theta);
-    transformation(2, 2) = std::cos(theta);
-
-    // Translation on y-axis
-    transformation(1, 3) = d; // 1 meter translation on y axis
-
-    pcl::transformPointCloud(*input, *output, transformation);
+    pcl::transformPointCloud(*input, *output, inverse);
 
     return output;
 }
@@ -109,13 +88,21 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudDownsampled = downsample(cloudPassthroughZ);
 
     // Transform (rotate & translate) so the ground is on the y-axis
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudTransformed = transform(cloudDownsampled);
+    // Rotation around x-axis
+    Eigen::Matrix4f transformation = Eigen::Matrix4f::Identity();
+    double theta = -std::acos(std::abs(b) / (std::sqrt(a * a + b * b + c * c)));
+    transformation(1, 1) = std::cos(theta);
+    transformation(1, 2) = -std::sin(theta);
+    transformation(2, 1) = std::sin(theta);
+    transformation(2, 2) = std::cos(theta);
+    transformation(1, 3) = -d; // 1 meter translation on y axis*/
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudTransformed = transform(cloudDownsampled, transformation);
 
     // Filter out everything below 1cm (floor) and above debris (15cm)
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughY = passThroughY(cloudTransformed);
 
     // Transform back so the camera center is on the y-axis
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudUntransformed = untransform(cloudPassthroughY);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudUntransformed = untransform(cloudPassthroughY, transformation.inverse());
 
     cloudPublisher.publish(cloudUntransformed);
 }

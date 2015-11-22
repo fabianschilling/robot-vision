@@ -58,7 +58,8 @@ class Visualizer:
             px = int(self.point.x)
             py = int(self.point.y)
             s = int(38.5 / self.point.z)
-            cv2.rectangle(self.image, (px - s / 2, py - s / 2), (px + s / 2, py + s / 2), (0, 0, 0))
+            cv2.circle(self.image, (px, py), 15, (0, 0, 0))
+            #cv2.rectangle(self.image, (px - s / 2, py - s / 2), (px + s / 2, py + s / 2), (0, 0, 0))
 
         cv2.imshow('visualization', self.image)
 
