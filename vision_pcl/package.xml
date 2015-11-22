@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package>
-  <name>ras_vision_pcl</name>
+  <name>vision_pcl</name>
   <version>0.0.0</version>
-  <description>The ras_vision_pcl package</description>
+  <description>The vision_pcl package</description>
 
   <maintainer email="fabsch@kth.se">Fabian Schilling</maintainer>
 

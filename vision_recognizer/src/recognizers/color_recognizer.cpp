@@ -11,7 +11,7 @@
 // ROS messages
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
-#include <ras_vision_recognizer/Rect.h>
+#include <vision_recognizer/Rect.h>
 
 // OpenCV
 #include <opencv2/core/core.hpp>
@@ -43,7 +43,7 @@ void colorCallback(const sensor_msgs::Image::ConstPtr& message) {
 
 }
 
-void objectCallback(const ras_vision_recognizer::Rect::ConstPtr& message) {
+void objectCallback(const vision_recognizer::Rect::ConstPtr& message) {
 
     if (image.empty()) {
         return;
@@ -81,7 +81,7 @@ int main(int argc, char ** argv) {
     cv::namedWindow(IMAGE_WINDOW, cv::WINDOW_NORMAL);
 
     imageSubscriber = nh.subscribe<sensor_msgs::Image>("/camera/rgb/image_raw", 1, colorCallback);
-    objectSubsriber = nh.subscribe<ras_vision_recognizer::Rect>("/vision/object_rect", 1, objectCallback);
+    objectSubsriber = nh.subscribe<vision_recognizer::Rect>("/vision/object_rect", 1, objectCallback);
 
     //publisher = nh.advertise<ras_vision_recognizer::Rect>("/vision/object_rect", 1);
 

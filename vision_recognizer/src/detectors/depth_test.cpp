@@ -11,7 +11,7 @@
 // ROS messages
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
-#include <ras_vision_recognizer/Rect.h>
+#include <vision_recognizer/Rect.h>
 
 // OpenCV
 #include <opencv2/core/core.hpp>
@@ -132,7 +132,7 @@ void colorCallback(const sensor_msgs::Image::ConstPtr& message) {
 
 void publishMessage(const cv::Rect rect) {
 
-    ras_vision_recognizer::Rect message;
+    vision_recognizer::Rect message;
     message.x = rect.x;
     message.y = rect.y;
     message.width = rect.width;
@@ -282,7 +282,7 @@ int main(int argc, char ** argv) {
     depthSubscriber = nh.subscribe<sensor_msgs::Image>("/camera/depth/image", 1, depthCallback);
     colorSubscriber = nh.subscribe<sensor_msgs::Image>("/camera/rgb/image_raw", 1, colorCallback);
 
-    cloudPublisher = nh.advertise<ras_vision_recognizer::Rect>("/vision/object_rect", 1);
+    cloudPublisher = nh.advertise<vision_recognizer::Rect>("/vision/object_rect", 1);
 
     ros::spin();
 

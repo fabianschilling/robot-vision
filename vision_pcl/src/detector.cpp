@@ -4,6 +4,7 @@
 // Messages
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/Point.h>
+#include <vision_msgs/Rect.h>
 
 // PCL
 #include <pcl_ros/point_cloud.h>

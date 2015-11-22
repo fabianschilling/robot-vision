@@ -11,7 +11,7 @@
 // ROS messages
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
-#include <ras_vision_recognizer/Rect.h>
+#include <vision_recognizer/Rect.h>
 
 // OpenCV
 #include <opencv2/core/core.hpp>
@@ -353,7 +353,7 @@ int main(int argc, char ** argv) {
     */
     depthSubscriber = nh.subscribe<sensor_msgs::Image>("/camera/depth/image", 1, depthCallback);
 
-    cloudPublisher = nh.advertise<ras_vision_recognizer::Rect>("/vision/object_rect", 1);
+    cloudPublisher = nh.advertise<vision_recognizer::Rect>("/vision/object_rect", 1);
 
     ros::spin();
 

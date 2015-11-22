@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package>
-  <name>ras_vision</name>
+  <name>vision</name>
   <version>0.0.0</version>
   <description>The ras_depth package</description>
 

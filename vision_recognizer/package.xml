@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <package>
 
-  <name>ras_vision_recognizer</name>
+  <name>vision_recognizer</name>
   <version>0.0.0</version>
-  <description>The ras_vision_recognizer package</description>
+  <description>The vision_recognizer package</description>
   <maintainer email="fabsch@kth.se">Fabian Schilling</maintainer>
 
   <license>BSD</license>

@@ -1,0 +1,18 @@
+<launch>
+
+<!-- depth detector node -->
+<node pkg="vision_recognizer" type="depth_detector.py" name="depth_recognizer" />
+
+<!-- color recognizer node -->
+<node pkg="vision_recognizer" type="color_recognizer.py" name="color_recognizer"/>
+
+<!-- shape recognizer node -->
+<node pkg="vision_recognizer" type="shape_recognizer.py" name="shape_recognizer"/>
+
+<!-- material recognizer node -->
+<node pkg="vision_recognizer" type="material_recognizer.py" name="material_recognizer"/>
+
+<!-- object classifier -->
+<node pkg="vision_recognizer" type="object_classifier.py" name="object_classifier"/>
+
+</launch>
