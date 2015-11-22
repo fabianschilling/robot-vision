@@ -40,3 +40,6 @@ target_link_libraries(ransac_model ${catkin_LIBRARIES})
 
 add_executable(detector src/detector.cpp)
 target_link_libraries(detector ${catkin_LIBRARIES})
+
+add_executable(preprocess src/preprocess.cpp)
+target_link_libraries(preprocess ${catkin_LIBRARIES})

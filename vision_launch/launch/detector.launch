@@ -1,0 +1,4 @@
+<launch>
+<node pkg="vision_pcl" type="preprocess" name="preprocess"/>
+<node pkg="vision_pcl" type="detector" name="detector" />
+</launch>

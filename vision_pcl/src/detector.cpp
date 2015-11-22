@@ -62,43 +62,6 @@ double const maxY = -0.01; // 1cm
 
 double const minSaturation = 0.3;
 
-double distanceToPlane(Eigen::Vector4f centroid) {
-
-    double x = centroid[0];
-    double y = centroid[1];
-    double z = centroid[2];
-
-    double distTop = std::abs(a * x + b * y + c * z + d);
-    double distBot = std::sqrt(a * a + b * b + c * c);
-
-    return distTop / distBot;
-}
-
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr passThroughZ(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input) {
-
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
-
-    pcl::PassThrough<pcl::PointXYZRGB> passthrough;
-    passthrough.setInputCloud(input);
-    passthrough.setFilterFieldName("z");
-    passthrough.setFilterLimits(minZ, maxZ); // 0-1m
-    passthrough.filter(*output);
-
-    return output;
-}
-
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr downsample(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
-
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
-
-    pcl::VoxelGrid<pcl::PointXYZRGB> downsample;
-    downsample.setInputCloud(input);
-    downsample.setLeafSize(leafSize, leafSize, leafSize);
-    downsample.filter(*output);
-
-    return output;
-}
-
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr passThroughY(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -112,7 +75,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr passThroughY(pcl::PointCloud<pcl::PointXY
     return output;
 }
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr transform(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input, Eigen::Matrix4f transformation) {
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr transform(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input, Eigen::Matrix4f transformation) {
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
 
@@ -245,15 +208,9 @@ Eigen::Matrix4f getTransformation() {
 
 void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud) {
 
-    // Filter out everything farther than 1m
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughZ = passThroughZ(inputCloud);
-
-    // Downsample cloud
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudDownsampled = downsample(cloudPassthroughZ);
-
     // Transform (rotate & translate) so the ground is on the y-axis
     Eigen::Matrix4f transformation = getTransformation();
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudTransformed = transform(cloudDownsampled, transformation);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudTransformed = transform(inputCloud, transformation);
 
     // Filter out everything below 1cm (floor) and above debris (15cm)
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughY = passThroughY(cloudTransformed);
@@ -351,8 +308,8 @@ int main (int argc, char** argv) {
   ros::init (argc, argv, "voxel_grid");
   ros::NodeHandle nh;
 
-  subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/camera/depth_registered/points", 1, cloudCallback);
-  cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/voxel_grid", 1);
+  subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/vision/preprocessed", 1, cloudCallback);
+  cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/vision/filtered", 1);
   pointPublisher = nh.advertise<geometry_msgs::Point>("/vision/object_centroid", 1);
 
   ros::Rate r(10); // 10Hz
