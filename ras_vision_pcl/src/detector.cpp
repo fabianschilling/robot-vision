@@ -41,10 +41,10 @@ ros::Publisher pointPublisher;
 ros::Subscriber subscriber;
 
 // These need to be adjusted every time the plane changes
-double const a = -0.00664897;
-double const b = -0.882463;
-double const c = -0.470334;
-double const d = 0.256906;
+double const a = -0.0148561;
+double const b = -0.875129;
+double const c = -0.48365;
+double const d = 0.25741;
 
 // Intrinsic camera parameters
 double const fx = 574.05279;
@@ -58,6 +58,8 @@ double const maxZ = 1.0; // 1m
 double const minY = -0.30; // 30cm (may want the wall information too!
 //double const minY = -0.15; // 15cm
 double const maxY = -0.01; // 1cm
+
+double const minSaturation = 0.3;
 
 double distanceToPlane(Eigen::Vector4f centroid) {
 
@@ -132,7 +134,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
     segmentation.setDistanceThreshold(0.02);
 
     //int numPoints = (int) input->points.size();
-
+    int i = 1;
     // While still planes in the scene
     while (input->points.size() > 1000) {
 
@@ -142,7 +144,12 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
         if (inliers->indices.size() == 0) {
             std::cout << "No planar model" << std::endl;
             break;
+        } else if (inliers->indices.size() < 1000) {
+            std::cout << "Planar model too small" << std::endl;
+            break;
         }
+
+        std::cout << "Iteration " << i << ": Removing plane of size: " << inliers->indices.size() << std::endl;
 
         // Extract the planar inliers from the input cloud
         pcl::ExtractIndices<pcl::PointXYZRGB> extract;
@@ -158,6 +165,8 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
         extract.setNegative(true);
         extract.filter(*filtered);
         *input = *filtered;
+
+        i++;
     }
 
     return input;
@@ -182,11 +191,11 @@ std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> computeClusters(pcl::PointCl
 
     for (std::vector<pcl::PointIndices>::const_iterator it = clusterIndices.begin(); it != clusterIndices.end(); ++it) {
 
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZRGB>);
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZRGB>(*input, it->indices));
 
-        for (std::vector<int>::const_iterator pit = it->indices.begin(); pit != it->indices.end(); ++pit) {
+        /*for (std::vector<int>::const_iterator pit = it->indices.begin(); pit != it->indices.end(); ++pit) {
             cluster->points.push_back(input->points[*pit]);
-        }
+        }*/
 
         clusters.push_back(cluster);
     }
@@ -284,8 +293,6 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
         if (minPoint[1] > -0.07 && minPoint[1] < -0.01) {
 
-
-
             pcl::PointCloud<pcl::PointXYZHSV>::Ptr hsvCluster(new pcl::PointCloud<pcl::PointXYZHSV>);
 
             pcl::PointCloudXYZRGBtoXYZHSV(*clusters[i], *hsvCluster);
@@ -296,7 +303,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
             std::cout << "(" << avg.h << ", " << avg.s << ", " << avg.v << ")" << std::endl;
 
-            if (avg.s > 0.4) {
+            if (avg.s > minSaturation) {
 
                 std::cout << "Object" << std::endl;
 
@@ -345,9 +352,9 @@ int main (int argc, char** argv) {
 
   subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/camera/depth_registered/points", 1, cloudCallback);
   cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/voxel_grid", 1);
-  pointPublisher = nh.advertise<geometry_msgs::Point>("/vision/object_rect", 1);
+  pointPublisher = nh.advertise<geometry_msgs::Point>("/vision/object_centroid", 1);
 
-  ros::Rate r(1); // 10Hz
+  ros::Rate r(10); // 10Hz
 
   while (ros::ok()) {
       ros::spinOnce();

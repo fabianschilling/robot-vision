@@ -9,6 +9,8 @@
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
 
+#include <cmath>
+
 ros::Publisher pub;
 
 std::vector<double> as;
@@ -16,6 +18,21 @@ std::vector<double> bs;
 std::vector<double> cs;
 std::vector<double> ds;
 
+double median(std::vector<double>& vec) {
+
+    double median;
+    int size = vec.size();
+
+    std::sort(vec.begin(), vec.end());
+
+    if (size % 2 == 0) {
+        median = (vec[size / 2 - 1] + vec[size / 2]) / 2;
+    } else {
+        median = vec[size / 2];
+    }
+
+    return median;
+}
 
 double mean(std::vector<double>& vec) {
 
@@ -61,7 +78,11 @@ cloudCallback (const sensor_msgs::PointCloud2ConstPtr& input)
 
     std::cout << "Num points: " << as.size() << std::endl;
 
-    std::cout << mean(as) << " " << mean(bs) << " " << mean(cs) << " " << mean(ds) <<  std::endl;
+    std::cout << a << " " << b << " " << c << " " << d <<  std::endl;
+
+    std::cout << "Mean:   " << mean(as) << " " << mean(bs) << " " << mean(cs) << " " << mean(ds) <<  std::endl;
+
+    std::cout << "Median: " << median(as) << " " << median(bs) << " " << median(cs) << " " << median(ds) <<  std::endl;
 
     // Publish the model coefficients
     pcl_msgs::ModelCoefficients ros_coefficients;

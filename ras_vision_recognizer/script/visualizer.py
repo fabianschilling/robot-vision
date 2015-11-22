@@ -30,9 +30,9 @@ class Visualizer:
         self.point = None
 
         self.subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.color_callback, queue_size=1)
-        self.subscriber = rospy.Subscriber('/vision/object_rect', Point, self.point_callback, queue_size=1)
+        self.subscriber = rospy.Subscriber('/vision/object_centroid', Point, self.point_callback, queue_size=1)
 
-        self.publisher = rospy.Publisher('/object/color', UInt8, queue_size=1)
+        self.publisher = rospy.Publisher('/vision/object_rect', UInt8, queue_size=1)
 
         self.bridge = CvBridge()
 
@@ -58,8 +58,10 @@ class Visualizer:
             px = int(self.point.x)
             py = int(self.point.y)
             s = int(38.5 / self.point.z)
-            cv2.circle(self.image, (px, py), 15, (0, 0, 0))
-            #cv2.rectangle(self.image, (px - s / 2, py - s / 2), (px + s / 2, py + s / 2), (0, 0, 0))
+            cv2.circle(self.image, (px, py), 3, (255, 255, 255))
+
+
+            cv2.rectangle(self.image, (px - s / 2, py - s / 2), (px + s / 2, py + s / 2), (0, 0, 0))
 
         cv2.imshow('visualization', self.image)
 
