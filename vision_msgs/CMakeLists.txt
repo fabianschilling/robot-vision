@@ -7,6 +7,9 @@ add_message_files(
   DIRECTORY msg
   FILES
     Rect.msg
+    Point.msg
+    Points.msg
+    Histogram.msg
 )
 
 generate_messages(

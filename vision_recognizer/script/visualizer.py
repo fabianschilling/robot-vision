@@ -12,7 +12,8 @@ import signal
 # ROS imports
 import rospy
 from sensor_msgs.msg import Image
-from geometry_msgs.msg import Point
+#from geometry_msgs.msg import Point
+from vision_msgs.msg import Point
 from std_msgs.msg import UInt8
 from ras_vision_recognizer.msg import Rect
 from cv_bridge import CvBridge
@@ -55,12 +56,15 @@ class Visualizer:
         self.image = self.bridge.imgmsg_to_cv2(data, 'bgr8')
 
         if self.point is not None:
+
+            #for pt in self.point.points:
+            #    px = int(pt.x)
+            #    py = int(pt.y)
+            #    cv2.circle(self.image, (px, py), 3, (255, 255, 255))
             px = int(self.point.x)
             py = int(self.point.y)
             s = int(38.5 / self.point.z)
             cv2.circle(self.image, (px, py), 3, (255, 255, 255))
-
-
             cv2.rectangle(self.image, (px - s / 2, py - s / 2), (px + s / 2, py + s / 2), (0, 0, 0))
 
         cv2.imshow('visualization', self.image)

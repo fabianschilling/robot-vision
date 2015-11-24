@@ -5,6 +5,9 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/Point.h>
 #include <vision_msgs/Rect.h>
+#include <vision_msgs/Point.h>
+#include <vision_msgs/Points.h>
+#include <vision_msgs/Histogram.h>
 
 // PCL
 #include <pcl_ros/point_cloud.h>
@@ -39,17 +42,19 @@
 
 ros::Publisher cloudPublisher;
 ros::Publisher pointPublisher;
+ros::Publisher clusterPublisher;
+ros::Publisher histogramPublisher;
 ros::Subscriber subscriber;
 
 // These need to be adjusted every time the plane changes
-double const a = -0.0148561;
-double const b = -0.875129;
-double const c = -0.48365;
-double const d = 0.25741;
+double const a = -0.00446415;
+double const b = -0.863952;
+double const c = -0.503556;
+double const d = 0.289555;
 
 // Intrinsic camera parameters
-double const fx = 574.05279;
-double const fy = 574.05279;
+double const fx = 574.0527954101562;
+double const fy = 574.0527954101562;
 double const cx = 319.5;
 double const cy = 239.5;
 
@@ -61,6 +66,64 @@ double const minY = -0.30; // 30cm (may want the wall information too!
 double const maxY = -0.01; // 1cm
 
 double const minSaturation = 0.3;
+
+
+
+vision_msgs::Point convert(Eigen::Vector3f pt) {
+
+    vision_msgs::Point result;
+    result.x = pt[0];
+    result.y = pt[1];
+    result.z = pt[2];
+
+    return result;
+}
+
+Eigen::Vector3f project(Eigen::Vector4f p3d) {
+
+    Eigen::Vector3f p2d;
+
+    p2d[0] = (fx * p3d[0]/p3d[2] + cx);
+    p2d[1] = (fy * p3d[1]/p3d[2] + cy);
+    p2d[2] = p3d[2];
+
+    return p2d;
+}
+
+vision_msgs::Points computeExtremePoints(Eigen::Vector4f min, Eigen::Vector4f max, Eigen::Vector4f ctr) {
+
+    vision_msgs::Points result;
+
+    // Calculate extreme values
+    Eigen::Vector4f ul;
+    ul[0] = min[0];
+    ul[1] = min[1];
+    ul[2] = ctr[2];
+
+    Eigen::Vector4f ur;
+    ur[0] = max[0];
+    ur[1] = min[1];
+    ur[2] = ctr[2];
+
+    Eigen::Vector4f ll;
+    ll[0] = min[0];
+    ll[1] = max[1];
+    ll[2] = ctr[2];
+
+    Eigen::Vector4f lr;
+    lr[0] = max[0];
+    lr[1] = max[1];
+    lr[2] = ctr[2];
+
+    // Project extrema onto plane
+
+    result.points.push_back(convert(project(ul)));
+    result.points.push_back(convert(project(ur)));
+    result.points.push_back(convert(project(ll)));
+    result.points.push_back(convert(project(lr)));
+
+    return result;
+}
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr passThroughY(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
 
@@ -144,7 +207,7 @@ std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> computeClusters(pcl::PointCl
 
     std::vector<pcl::PointIndices> clusterIndices;
     pcl::EuclideanClusterExtraction<pcl::PointXYZRGB> extract;
-    extract.setClusterTolerance(0.04); // 4cm
+    extract.setClusterTolerance(0.02); // 2cm
     extract.setMinClusterSize(20);
     extract.setMaxClusterSize(1000);
     extract.setSearchMethod(tree);
@@ -156,10 +219,6 @@ std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> computeClusters(pcl::PointCl
     for (std::vector<pcl::PointIndices>::const_iterator it = clusterIndices.begin(); it != clusterIndices.end(); ++it) {
 
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZRGB>(*input, it->indices));
-
-        /*for (std::vector<int>::const_iterator pit = it->indices.begin(); pit != it->indices.end(); ++pit) {
-            cluster->points.push_back(input->points[*pit]);
-        }*/
 
         clusters.push_back(cluster);
     }
@@ -204,6 +263,30 @@ Eigen::Matrix4f getTransformation() {
     transformation(1, 3) = -d; // 1 meter translation on y axis*/
 
     return transformation;
+}
+
+vision_msgs::Histogram computeHistogram(pcl::PointCloud<pcl::PointXYZHSV>::Ptr input) {
+
+    vision_msgs::Histogram result;
+
+    std::vector<double> histogram(360);
+    size_t size = input->points.size();
+
+    for (size_t i = 0; i < size; ++i) {
+
+        if (input->points[i].s > minSaturation) {
+            int index = input->points[i].h;
+            histogram[index] += 1.0;
+        }
+    }
+
+    for (size_t i = 0; i < histogram.size(); ++i) {
+        histogram[i] /= (double) size;
+    }
+
+    result.histogram = histogram;
+
+    return result;
 }
 
 void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud) {
@@ -271,22 +354,27 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
                 Eigen::Vector4f centroid;
                 pcl::compute3DCentroid(*untransformed, centroid);
 
-                float x = centroid[0];
-                float y = centroid[1];
-                float z = centroid[2];
-
-                int px = (int) (fx * x/z + cx);
-                int py = (int) (fy * y/z + cy);
+                Eigen::Vector3f p2d = project(centroid);
 
                 //std::cout << "Centroid: (" << x << ", " << y << ", " << z << ")" << std::endl;
                 //std::cout << "Pixels: (" << px << ", " << py << ")" << std::endl;
 
-                geometry_msgs::Point point;
-                point.x = px;
-                point.y = py;
-                point.z = z;
+                vision_msgs::Point point = convert(p2d);
+
                 pointPublisher.publish(point);
 
+                vision_msgs::Histogram histogram = computeHistogram(hsvCluster);
+
+                histogramPublisher.publish(histogram);
+
+
+                /*geometry_msgs::Point point;
+                point.x = p2d[0];
+                point.y = p2d[1];
+                point.z = p2d[2];
+                pointPublisher.publish(point);*/
+
+                //clusterPublisher.publish(hsvCluster);
 
             }
 
@@ -310,7 +398,9 @@ int main (int argc, char** argv) {
 
   subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/vision/preprocessed", 1, cloudCallback);
   cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/vision/filtered", 1);
-  pointPublisher = nh.advertise<geometry_msgs::Point>("/vision/object_centroid", 1);
+  clusterPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZHSV> >("/vision/cluster", 1);
+  pointPublisher = nh.advertise<vision_msgs::Point>("/vision/object_centroid", 1);
+  histogramPublisher = nh.advertise<vision_msgs::Histogram>("vision/histogram", 1);
 
   ros::Rate r(10); // 10Hz
 
