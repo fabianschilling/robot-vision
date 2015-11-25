@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import rospy
 
 from vision_msgs.msg import Histogram
+from sklearn.preprocessing import normalize
 
 class Visualizer:
 
@@ -25,11 +26,17 @@ class Visualizer:
 		else:
 			self.histogram = np.add(self.histogram, histogram.histogram)
 
-		if self.counter == 100:
-			plt.plot(self.histogram)
+		self.counter += 1
+
+		if self.counter == 1000:
+			hist = self.histogram
+			normalized = normalize(hist[:,np.newaxis], axis=0, norm='l1').ravel()
+			print('Sum = ' + str(np.sum(normalized)))
+			np.savetxt('lgreen.txt', normalized)
+			plt.plot(normalized)
 			plt.show()
 
-		self.counter += 1
+		
 
 def main():
 	Visualizer()

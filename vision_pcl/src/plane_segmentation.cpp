@@ -78,11 +78,11 @@ cloudCallback (const sensor_msgs::PointCloud2ConstPtr& input)
 
     std::cout << "Num points: " << as.size() << std::endl;
 
-    std::cout << a << " " << b << " " << c << " " << d <<  std::endl;
+    std::cout << "Raw: " << a << " " << b << " " << c << " " << d <<  std::endl;
 
-    std::cout << "Mean:   " << mean(as) << " " << mean(bs) << " " << mean(cs) << " " << mean(ds) <<  std::endl;
+    std::cout << "Mean:   " << mean(as) << ", " << mean(bs) << ", " << mean(cs) << ", " << mean(ds) <<  std::endl;
 
-    std::cout << "Median: " << median(as) << " " << median(bs) << " " << median(cs) << " " << median(ds) <<  std::endl;
+    std::cout << "Median: " << median(as) << ", " << median(bs) << ", " << median(cs) << ", " << median(ds) <<  std::endl;
 
     // Publish the model coefficients
     pcl_msgs::ModelCoefficients ros_coefficients;

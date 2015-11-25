@@ -47,6 +47,21 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr downsample(pcl::PointCloud<pcl::PointXYZR
     return output;
 }
 
+double getNanRatio(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
+
+    double nanSum = 0.0;
+
+    for(size_t i = 0; i < input->points.size(); i++) {
+        if(isnan(input->points[i].x) || isnan(input->points[i].y) || isnan(input->points[i].z)) {
+            nanSum += 1.0;
+        }
+    }
+
+    return nanSum;
+
+}
+
+
 void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud) {
 
     // Filter out everything farther than 1m
@@ -54,6 +69,10 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
     // Downsample cloud
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudDownsampled = downsample(cloudPassthroughZ);
+
+    double nanRatio = getNanRatio(cloudDownsampled);
+
+    std::cout << "Nan sum: " << nanRatio << std::endl;
 
     // Downsampling calculations
 

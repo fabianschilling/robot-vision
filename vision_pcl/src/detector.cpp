@@ -42,15 +42,17 @@
 
 ros::Publisher cloudPublisher;
 ros::Publisher pointPublisher;
-ros::Publisher clusterPublisher;
+ros::Publisher processedPublisher;
 ros::Publisher histogramPublisher;
 ros::Subscriber subscriber;
 
 // These need to be adjusted every time the plane changes
-double const a = -0.00446415;
-double const b = -0.863952;
-double const c = -0.503556;
-double const d = 0.289555;
+double const a = 0.018485;
+double const b = -0.846875;
+double const c = -0.531485;
+double const d = 0.257969;
+
+static const double P[] = {-0.00974888, -0.877952, -0.478626, 0.255177};
 
 // Intrinsic camera parameters
 double const fx = 574.0527954101562;
@@ -125,6 +127,31 @@ vision_msgs::Points computeExtremePoints(Eigen::Vector4f min, Eigen::Vector4f ma
     return result;
 }
 
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr passThroughZ(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input) {
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
+
+    pcl::PassThrough<pcl::PointXYZRGB> passthrough;
+    passthrough.setInputCloud(input);
+    passthrough.setFilterFieldName("z");
+    passthrough.setFilterLimits(minZ, maxZ); // 0-1m
+    passthrough.filter(*output);
+
+    return output;
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr downsample(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
+
+    pcl::VoxelGrid<pcl::PointXYZRGB> downsample;
+    downsample.setInputCloud(input);
+    downsample.setLeafSize(leafSize, leafSize, leafSize);
+    downsample.filter(*output);
+
+    return output;
+}
+
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr passThroughY(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -138,7 +165,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr passThroughY(pcl::PointCloud<pcl::PointXY
     return output;
 }
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr transform(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input, Eigen::Matrix4f transformation) {
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr transform(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input, Eigen::Matrix4f transformation) {
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
 
@@ -169,14 +196,14 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
         segmentation.segment(*inliers, *coefficients);
 
         if (inliers->indices.size() == 0) {
-            std::cout << "No planar model" << std::endl;
+            //std::cout << "No planar model" << std::endl;
             break;
         } else if (inliers->indices.size() < 1000) {
-            std::cout << "Planar model too small" << std::endl;
+            //std::cout << "Planar model too small" << std::endl;
             break;
         }
 
-        std::cout << "Iteration " << i << ": Removing plane of size: " << inliers->indices.size() << std::endl;
+        //std::cout << "Iteration " << i << ": Removing plane of size: " << inliers->indices.size() << std::endl;
 
         // Extract the planar inliers from the input cloud
         pcl::ExtractIndices<pcl::PointXYZRGB> extract;
@@ -255,12 +282,12 @@ pcl::PointXYZHSV getCloudAverage(pcl::PointCloud<pcl::PointXYZHSV>::Ptr input) {
 Eigen::Matrix4f getTransformation() {
 
     Eigen::Matrix4f transformation = Eigen::Matrix4f::Identity();
-    double theta = -std::acos(std::abs(b) / (std::sqrt(a * a + b * b + c * c)));
+    double theta = -std::acos(std::abs(P[1]) / (std::sqrt(P[0] * P[0] + P[1] * P[1] + P[2] * P[2])));
     transformation(1, 1) = std::cos(theta);
     transformation(1, 2) = -std::sin(theta);
     transformation(2, 1) = std::sin(theta);
     transformation(2, 2) = std::cos(theta);
-    transformation(1, 3) = -d; // 1 meter translation on y axis*/
+    transformation(1, 3) = -P[3]; // 1 meter translation on y axis*/
 
     return transformation;
 }
@@ -274,7 +301,7 @@ vision_msgs::Histogram computeHistogram(pcl::PointCloud<pcl::PointXYZHSV>::Ptr i
 
     for (size_t i = 0; i < size; ++i) {
 
-        if (input->points[i].s > minSaturation) {
+        if (input->points[i].s > minSaturation && !isnan(input->points[i].x) && !isnan(input->points[i].y) && !isnan(input->points[i].z)) {
             int index = input->points[i].h;
             histogram[index] += 1.0;
         }
@@ -289,14 +316,36 @@ vision_msgs::Histogram computeHistogram(pcl::PointCloud<pcl::PointXYZHSV>::Ptr i
     return result;
 }
 
+double getNanRatio(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input) {
+
+    double nanSum = 0.0;
+
+    for(size_t i = 0; i < input->points.size(); i++) {
+        if(isnan(input->points[i].x) || isnan(input->points[i].y) || isnan(input->points[i].z)) {
+            nanSum += 1.0;
+        }
+    }
+
+    return nanSum;
+
+}
+
 void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud) {
+
+    // Filter out everything farther than 1m
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughZ = passThroughZ(inputCloud);
+
+    // Downsample cloud
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudDownsampled = downsample(cloudPassthroughZ);
 
     // Transform (rotate & translate) so the ground is on the y-axis
     Eigen::Matrix4f transformation = getTransformation();
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudTransformed = transform(inputCloud, transformation);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudTransformed = transform(cloudDownsampled, transformation);
 
     // Filter out everything below 1cm (floor) and above debris (15cm)
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughY = passThroughY(cloudTransformed);
+
+    processedPublisher.publish(cloudPassthroughY);
 
     // Transform back so the camera center is on the y-axis
     //pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudUntransformed = untransform(cloudPassthroughY);
@@ -312,20 +361,20 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
     for (int i = 0; i < clusters.size(); ++i) {
 
-        std::cout << "Cluster " << (i + 1) << std::endl;
+        //std::cout << "Cluster " << (i + 1) << std::endl;
 
-        std::cout << "Size:"  << clusters[i]->points.size() << std::endl;
+        //std::cout << "Size:"  << clusters[i]->points.size() << std::endl;
 
         Eigen::Vector4f minPoint, maxPoint;
         pcl::getMinMax3D(*clusters[i], minPoint, maxPoint);
-        std::cout << "Min y: " << minPoint[1] << std::endl;
-        std::cout << "Max y: " << maxPoint[1] << std::endl;
+        //std::cout << "Min y: " << minPoint[1] << std::endl;
+        //std::cout << "Max y: " << maxPoint[1] << std::endl;
 
         double width = std::abs(std::abs(minPoint[0]) - std::abs(maxPoint[0]));
         double height = std::abs(std::abs(minPoint[1]) - std::abs(maxPoint[1]));
 
-        std::cout << "Width: " << width << std::endl;
-        std::cout << "Height: " << height << std::endl;
+        //std::cout << "Width: " << width << std::endl;
+        //std::cout << "Height: " << height << std::endl;
 
         //Eigen::Vector4f centroid;
         //pcl::compute3DCentroid(*clusters[i], centroid);
@@ -342,7 +391,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
             pcl::PointXYZHSV avg = getCloudAverage(hsvCluster);
 
-            std::cout << "(" << avg.h << ", " << avg.s << ", " << avg.v << ")" << std::endl;
+            //std::cout << "(" << avg.h << ", " << avg.s << ", " << avg.v << ")" << std::endl;
 
             if (avg.s > minSaturation) {
 
@@ -380,9 +429,9 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
 
         } else if (minPoint[1] < -0.07 && minPoint[1] > -0.15) {
-            std::cout << "Debris" << std::endl;
+            //std::cout << "Debris" << std::endl;
         } else {
-            std::cout << "Wall or noise?" << std::endl;
+            //std::cout << "Wall or noise?" << std::endl;
         }
 
         //cloudPublisher.publish(clusters[i]);
@@ -396,13 +445,14 @@ int main (int argc, char** argv) {
   ros::init (argc, argv, "voxel_grid");
   ros::NodeHandle nh;
 
-  subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/vision/preprocessed", 1, cloudCallback);
+  subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/camera/depth_registered/points", 1, cloudCallback);
+
   cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/vision/filtered", 1);
-  clusterPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZHSV> >("/vision/cluster", 1);
+  processedPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZHSV> >("/vision/processed", 1);
   pointPublisher = nh.advertise<vision_msgs::Point>("/vision/object_centroid", 1);
   histogramPublisher = nh.advertise<vision_msgs::Histogram>("vision/histogram", 1);
 
-  ros::Rate r(10); // 10Hz
+  ros::Rate r(100); // 10Hz
 
   while (ros::ok()) {
       ros::spinOnce();
