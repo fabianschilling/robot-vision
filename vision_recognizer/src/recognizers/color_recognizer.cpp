@@ -25,7 +25,7 @@ static const std::string IMAGE_WINDOW = "image";
 // Global variables
 ros::Subscriber imageSubscriber;
 ros::Subscriber objectSubsriber;
-ros::Publisher cloudPublisher;
+ros::Publisher publisher;
 cv::Mat image;
 
 void colorCallback(const sensor_msgs::Image::ConstPtr& message) {

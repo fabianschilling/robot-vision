@@ -40,19 +40,15 @@
 // Eigen
 #include <Eigen/Geometry>
 
-ros::Publisher cloudPublisher;
+ros::Publisher publisher;
 ros::Publisher pointPublisher;
 ros::Publisher processedPublisher;
 ros::Publisher histogramPublisher;
 ros::Subscriber subscriber;
 
 // These need to be adjusted every time the plane changes
-double const a = 0.018485;
-double const b = -0.846875;
-double const c = -0.531485;
-double const d = 0.257969;
 
-static const double P[] = {-0.00974888, -0.877952, -0.478626, 0.255177};
+static const double P[] = {-0.00324735, -0.88032, -0.474366, 0.290389};
 
 // Intrinsic camera parameters
 double const fx = 574.0527954101562;
@@ -67,7 +63,7 @@ double const minY = -0.30; // 30cm (may want the wall information too!
 //double const minY = -0.15; // 15cm
 double const maxY = -0.01; // 1cm
 
-double const minSaturation = 0.3;
+double const minSaturation = 0.2;
 
 
 
@@ -437,7 +433,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
         //cloudPublisher.publish(clusters[i]);
     }
 
-    cloudPublisher.publish(cloudFiltered);
+    publisher.publish(cloudFiltered);
 }
 
 int main (int argc, char** argv) {
@@ -447,16 +443,18 @@ int main (int argc, char** argv) {
 
   subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/camera/depth_registered/points", 1, cloudCallback);
 
-  cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/vision/filtered", 1);
+  publisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/vision/filtered", 1);
   processedPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZHSV> >("/vision/processed", 1);
   pointPublisher = nh.advertise<vision_msgs::Point>("/vision/object_centroid", 1);
   histogramPublisher = nh.advertise<vision_msgs::Histogram>("vision/histogram", 1);
 
-  ros::Rate r(100); // 10Hz
+  ros::spin();
+
+  /*ros::Rate r(100); // 10Hz
 
   while (ros::ok()) {
       ros::spinOnce();
       r.sleep();
-  }
+  }*/
 
 }

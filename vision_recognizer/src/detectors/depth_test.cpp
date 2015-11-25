@@ -53,7 +53,7 @@ static const std::string WIN_HSV = "hsv";
 // Global variables
 ros::Subscriber depthSubscriber;
 ros::Subscriber colorSubscriber;
-ros::Publisher cloudPublisher;
+ros::Publisher publisher;
 
 // Trackbar variables
 int minRange = 20; //cm
@@ -137,7 +137,7 @@ void publishMessage(const cv::Rect rect) {
     message.y = rect.y;
     message.width = rect.width;
     message.height = rect.height;
-    cloudPublisher.publish(message);
+    publisher.publish(message);
 }
 
 void depthCallback(const sensor_msgs::Image::ConstPtr& message) {
@@ -282,7 +282,7 @@ int main(int argc, char ** argv) {
     depthSubscriber = nh.subscribe<sensor_msgs::Image>("/camera/depth/image", 1, depthCallback);
     colorSubscriber = nh.subscribe<sensor_msgs::Image>("/camera/rgb/image_raw", 1, colorCallback);
 
-    cloudPublisher = nh.advertise<vision_recognizer::Rect>("/vision/object_rect", 1);
+    publisher = nh.advertise<vision_recognizer::Rect>("/vision/object_rect", 1);
 
     ros::spin();
 

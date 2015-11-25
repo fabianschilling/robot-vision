@@ -26,7 +26,7 @@
 #include <pcl/kdtree/kdtree.h> // KdTree
 #include <pcl/common/centroid.h>
 
-ros::Publisher cloudPublisher;
+ros::Publisher publisher;
 ros::Subscriber subscriber;
 
 const float fx = 574.0;
@@ -82,7 +82,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
         *cloudDownsampled = *cloudFiltered;
     }
 
-    cloudPublisher.publish(cloudDownsampled);
+    publisher.publish(cloudDownsampled);
 
 }
 
@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
     ros::NodeHandle nh;
 
     subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> >("/camera/depth_registered/points", 1, cloudCallback);
-    cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/pointcloud", 1);
+    publisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/pointcloud", 1);
 
 
     ros::Rate r(1); //1Hz

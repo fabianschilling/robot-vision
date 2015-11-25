@@ -15,7 +15,7 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
 
-ros::Publisher cloudPublisher;
+ros::Publisher publisher;
 ros::Subscriber subscriber;
 
 double const leafSize = 0.005;
@@ -81,7 +81,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
     int left = (int) (100.0 * (sizeAfter / sizeBefore));
     std::cout << left << "% remaining after preprocessing." << std::endl;*/
 
-    cloudPublisher.publish(cloudDownsampled);
+    publisher.publish(cloudDownsampled);
 }
 
 int main(int argc, char** argv) {
@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
   ros::NodeHandle nh;
 
   subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/camera/depth_registered/points", 1, cloudCallback);
-  cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/vision/preprocessed", 1);
+  publisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/vision/preprocessed", 1);
 
   ros::spin();
 

@@ -44,7 +44,7 @@ static const std::string NOISE_WIN = "no noise";
 
 // Global variables
 ros::Subscriber depthSubscriber;
-ros::Publisher cloudPublisher;
+ros::Publisher publisher;
 
 // Trackbar variables
 int dilation = 0;
@@ -353,7 +353,7 @@ int main(int argc, char ** argv) {
     */
     depthSubscriber = nh.subscribe<sensor_msgs::Image>("/camera/depth/image", 1, depthCallback);
 
-    cloudPublisher = nh.advertise<vision_recognizer::Rect>("/vision/object_rect", 1);
+    publisher = nh.advertise<vision_recognizer::Rect>("/vision/object_rect", 1);
 
     ros::spin();
 

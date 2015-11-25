@@ -8,7 +8,7 @@
 
 #include <pcl/filters/voxel_grid.h>
 
-ros::Publisher cloudPublisher;
+ros::Publisher publisher;
 ros::Subscriber subscriber;
 
 void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud) {
@@ -28,7 +28,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
     std::cout << "Downsampled: " << pointsBefore << " -> " << pointsAfter << " (" << pointsLeft << "% left)" << std::endl;
 
-    cloudPublisher.publish(voxelCloud);
+    publisher.publish(voxelCloud);
 }
 
 int main (int argc, char** argv) {
@@ -37,7 +37,7 @@ int main (int argc, char** argv) {
   ros::NodeHandle nh;
 
   subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> >("/camera/depth_registered/points", 1, cloudCallback);
-  cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/voxel_grid", 1);
+  publisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/voxel_grid", 1);
 
   ros::Rate r(10); // 10Hz
 

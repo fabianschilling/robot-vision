@@ -43,3 +43,6 @@ target_link_libraries(detector ${catkin_LIBRARIES})
 
 add_executable(preprocess src/preprocess.cpp)
 target_link_libraries(preprocess ${catkin_LIBRARIES})
+
+add_executable(region_growing src/region_growing.cpp)
+target_link_libraries(region_growing ${catkin_LIBRARIES})

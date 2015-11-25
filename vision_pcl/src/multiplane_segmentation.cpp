@@ -8,7 +8,7 @@
 
 #include <pcl/features/normal_3d.h>
 
-ros::Publisher cloudPublisher;
+ros::Publisher publisher;
 ros::Subscriber subscriber;
 
 void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud) {
@@ -34,7 +34,7 @@ int main (int argc, char** argv) {
   ros::NodeHandle nh;
 
   subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> >("/camera/depth_registered/points", 1, cloudCallback);
-  cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/segmentation", 1);
+  publisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/segmentation", 1);
 
   ros::Rate r(10); // 10Hz
 

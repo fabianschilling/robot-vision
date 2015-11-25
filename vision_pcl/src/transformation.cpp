@@ -10,7 +10,7 @@
 #include <pcl/filters/passthrough.h>
 #include <Eigen/Geometry>
 
-ros::Publisher cloudPublisher;
+ros::Publisher publisher;
 ros::Subscriber subscriber;
 
 double const a = -0.00664897;
@@ -104,7 +104,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
     // Transform back so the camera center is on the y-axis
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudUntransformed = untransform(cloudPassthroughY, transformation.inverse());
 
-    cloudPublisher.publish(cloudUntransformed);
+    publisher.publish(cloudUntransformed);
 }
 
 int main (int argc, char** argv) {
@@ -113,7 +113,7 @@ int main (int argc, char** argv) {
   ros::NodeHandle nh;
 
   subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> >("/camera/depth_registered/points", 1, cloudCallback);
-  cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/voxel_grid", 1);
+  publisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/voxel_grid", 1);
 
   ros::Rate r(10); // 10Hz
 

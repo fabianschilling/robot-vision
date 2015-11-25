@@ -26,7 +26,7 @@
 #include <pcl/kdtree/kdtree.h> // KdTree
 #include <pcl/common/centroid.h>
 
-ros::Publisher cloudPublisher;
+ros::Publisher publisher;
 ros::Publisher pointPublisher;
 ros::Subscriber subscriber;
 
@@ -111,7 +111,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
         return;
     }
 
-    cloudPublisher.publish(cloudDownsampled);
+    publisher.publish(cloudDownsampled);
 
     // Creating the KdTree object for the search method of the extraction
     pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGB>);
@@ -203,7 +203,7 @@ int main(int argc, char** argv) {
     ros::NodeHandle nh;
 
     subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> >("/camera/depth_registered/points", 1, cloudCallback);
-    cloudPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/pointcloud", 1);
+    publisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/pointcloud", 1);
     pointPublisher = nh.advertise<geometry_msgs::Point>("/vision/object_rect", 1);
 
 
