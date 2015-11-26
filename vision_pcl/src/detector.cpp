@@ -8,6 +8,8 @@
 #include <vision_msgs/Point.h>
 #include <vision_msgs/Points.h>
 #include <vision_msgs/Histogram.h>
+#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
 
 // PCL
 #include <pcl_ros/point_cloud.h>
@@ -44,11 +46,13 @@ ros::Publisher publisher;
 ros::Publisher pointPublisher;
 ros::Publisher processedPublisher;
 ros::Publisher histogramPublisher;
+ros::Publisher visualizationPublisher;
+ros::Publisher planePublisher;
 ros::Subscriber subscriber;
 
 // These need to be adjusted every time the plane changes
 
-static const double P[] = {-0.00324735, -0.88032, -0.474366, 0.290389};
+static const double P[] = {0.00266655, -0.818378, -0.574665, 0.25421};
 
 // Intrinsic camera parameters
 double const fx = 574.0527954101562;
@@ -65,7 +69,88 @@ double const maxY = -0.01; // 1cm
 
 double const minSaturation = 0.2;
 
+Eigen::Vector4f pclToRviz(Eigen::Vector4f pclPoint) {
 
+    Eigen::Vector4f rvizPoint;
+
+    //TODO: about 4cm off
+    rvizPoint[0] = pclPoint[2];
+    rvizPoint[1] = -(pclPoint[0] + 0.025);
+    rvizPoint[2] = -pclPoint[1];
+
+    return rvizPoint;
+}
+
+visualization_msgs::Marker getmarkerForPlane(Eigen::Vector4f minPoint, Eigen::Vector4f maxPoint, pcl::ModelCoefficients::Ptr coeffs, int id) {
+
+    visualization_msgs::Marker marker;
+
+    // Depending on plane orientation, flip z values
+    if ((coeffs->values[2] > 0 && coeffs->values[0] > 0) || (coeffs->values[2] < 0 && coeffs->values[0] < 0)) {
+        std::swap(minPoint[2], maxPoint[2]);
+    }
+
+    Eigen::Vector4f rvizMinPoint = pclToRviz(minPoint);
+    Eigen::Vector4f rvizMaxPoint = pclToRviz(maxPoint);
+
+    marker.header.frame_id = "camera_depth_frame";
+    marker.header.stamp = ros::Time::now();
+
+    marker.id = id;
+    marker.type = visualization_msgs::Marker::LINE_STRIP;
+    marker.action = visualization_msgs::Marker::ADD;
+
+    marker.scale.x = 0.02; // 2cm
+    marker.color.a = 1.0;
+    marker.color.r = 1.0;
+    marker.color.b = 0.0;
+    marker.color.b = 0.0;
+
+    marker.lifetime = ros::Duration(1.0);
+
+    geometry_msgs::Point begin;
+    begin.x = rvizMinPoint[0];
+    begin.y = rvizMinPoint[1];
+    begin.z = rvizMinPoint[2];
+    marker.points.push_back(begin);
+
+    geometry_msgs::Point end;
+    end.x = rvizMaxPoint[0];
+    end.y = rvizMaxPoint[1];
+    end.z = rvizMaxPoint[2];
+    marker.points.push_back(end);
+
+    return marker;
+
+}
+
+visualization_msgs::Marker getMarkerForObject(Eigen::Vector4f point, int id) {
+
+    visualization_msgs::Marker marker;
+
+    Eigen::Vector4f rvizPoint = pclToRviz(point);
+
+    marker.header.frame_id = "camera_depth_frame";
+    marker.header.stamp = ros::Time::now();
+
+    marker.id = id;
+    marker.type = visualization_msgs::Marker::SPHERE;
+    marker.action = visualization_msgs::Marker::ADD;
+    marker.pose.position.x = rvizPoint[0];
+    marker.pose.position.y = rvizPoint[1];
+    marker.pose.position.z = rvizPoint[2];
+    marker.scale.x = 0.04; // 4cm
+    marker.scale.y = 0.04; // 4cm
+    marker.scale.z = 0.04; // 4cm
+    marker.color.a = 1.0; // Don't forget to set the alpha!
+    marker.color.r = 0.0;
+    marker.color.g = 1.0;
+    marker.color.b = 0.0;
+    marker.lifetime = ros::Duration(1.0);
+
+    return marker;
+
+}
 
 vision_msgs::Point convert(Eigen::Vector3f pt) {
 
@@ -75,6 +160,13 @@ vision_msgs::Point convert(Eigen::Vector3f pt) {
     result.z = pt[2];
 
     return result;
+}
+
+void flatten(pcl::PointCloud<pcl::PointXYZRGB>::Ptr plane) {
+
+    for (size_t i = 0; i < plane->points.size(); ++i) {
+        plane->points[i].y = 0.0;
+    }
 }
 
 Eigen::Vector3f project(Eigen::Vector4f p3d) {
@@ -180,11 +272,13 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
     segmentation.setOptimizeCoefficients(true);
     segmentation.setModelType(pcl::SACMODEL_PLANE);
     segmentation.setMethodType(pcl::SAC_RANSAC);
-    segmentation.setMaxIterations(100);
+    segmentation.setMaxIterations(1000);
     segmentation.setDistanceThreshold(0.02);
 
+    visualization_msgs::MarkerArray planeMarkers;
+
     //int numPoints = (int) input->points.size();
-    int i = 1;
+    int i = 0;
     // While still planes in the scene
     while (input->points.size() > 1000) {
 
@@ -194,12 +288,12 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
         if (inliers->indices.size() == 0) {
             //std::cout << "No planar model" << std::endl;
             break;
-        } else if (inliers->indices.size() < 1000) {
+        } else if (inliers->indices.size() < 2000) {
             //std::cout << "Planar model too small" << std::endl;
             break;
         }
 
-        //std::cout << "Iteration " << i << ": Removing plane of size: " << inliers->indices.size() << std::endl;
+        std::cout << "Iteration " << (i + 1) << ": Removing plane of size: " << inliers->indices.size() << std::endl;
 
         // Extract the planar inliers from the input cloud
         pcl::ExtractIndices<pcl::PointXYZRGB> extract;
@@ -211,13 +305,27 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
          // Get the points associated with the planar surface
         extract.filter(*plane);
 
+        // Flatten plane into a line to get rid of height
+        flatten(plane);
+
+        Eigen::Vector4f minPoint, maxPoint;
+        pcl::getMinMax3D(*plane, minPoint, maxPoint);
+
+        visualization_msgs::Marker planeMarker = getmarkerForPlane(minPoint, maxPoint, coefficients, i);
+        planeMarkers.markers.push_back(planeMarker);
+        i++;
+
         // Remove the planar inliers, extract the rest
         extract.setNegative(true);
         extract.filter(*filtered);
         *input = *filtered;
 
-        i++;
+
     }
+
+    std::cout << "Publishing " << planeMarkers.markers.size() << " plane markers" << std::endl;
+
+    planePublisher.publish(planeMarkers);
 
     return input;
 
@@ -283,7 +391,9 @@ Eigen::Matrix4f getTransformation() {
     transformation(1, 2) = -std::sin(theta);
     transformation(2, 1) = std::sin(theta);
     transformation(2, 2) = std::cos(theta);
-    transformation(1, 3) = -P[3]; // 1 meter translation on y axis*/
+
+    transformation(1, 3) = -P[3]; // translation on y axis
+    //transformation(0, 3) = 0.05;  // translation on x axis
 
     return transformation;
 }
@@ -399,6 +509,12 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
                 Eigen::Vector4f centroid;
                 pcl::compute3DCentroid(*untransformed, centroid);
 
+                Eigen::Vector4f vizCentroid;
+                pcl::compute3DCentroid(*clusters[i], vizCentroid);
+
+                visualization_msgs::Marker objectMarker = getMarkerForObject(vizCentroid, 0);
+                visualizationPublisher.publish(objectMarker);
+
                 Eigen::Vector3f p2d = project(centroid);
 
                 //std::cout << "Centroid: (" << x << ", " << y << ", " << z << ")" << std::endl;
@@ -446,7 +562,9 @@ int main (int argc, char** argv) {
   publisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/vision/filtered", 1);
   processedPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZHSV> >("/vision/processed", 1);
   pointPublisher = nh.advertise<vision_msgs::Point>("/vision/object_centroid", 1);
-  histogramPublisher = nh.advertise<vision_msgs::Histogram>("vision/histogram", 1);
+  histogramPublisher = nh.advertise<vision_msgs::Histogram>("/vision/histogram", 1);
+  visualizationPublisher = nh.advertise<visualization_msgs::Marker>("/vision/object_marker", 1);
+  planePublisher = nh.advertise<visualization_msgs::MarkerArray>("/vision/plane_markers", 1);
 
   ros::spin();
 
