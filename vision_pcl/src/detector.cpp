@@ -25,6 +25,7 @@
 
 // PCL Filters
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/approximate_voxel_grid.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/extract_indices.h>
 
@@ -42,6 +43,7 @@
 // Eigen
 #include <Eigen/Geometry>
 
+// Global subscriber & publisher variables
 ros::Publisher publisher;
 ros::Publisher pointPublisher;
 ros::Publisher processedPublisher;
@@ -50,15 +52,14 @@ ros::Publisher visualizationPublisher;
 ros::Publisher planePublisher;
 ros::Subscriber subscriber;
 
-// These need to be adjusted every time the plane changes
+// Global PointCloud variables
 
-static const double P[] = {0.00266655, -0.818378, -0.574665, 0.25421};
+
+// These need to be adjusted every time the plane changes
+static const double P[] = {0.000719245, -0.820329, -0.571891, 0.254666};
 
 // Intrinsic camera parameters
-double const fx = 574.0527954101562;
-double const fy = 574.0527954101562;
-double const cx = 319.5;
-double const cy = 239.5;
+static const double C[] = {574.0527954101562, 574.0527954101562, 319.5, 239.5};
 
 double const leafSize = 0.005;
 double const minZ = 0.0; // 0m
@@ -67,13 +68,13 @@ double const minY = -0.30; // 30cm (may want the wall information too!
 //double const minY = -0.15; // 15cm
 double const maxY = -0.01; // 1cm
 
-double const minSaturation = 0.2;
+double const minSaturation = 0.4;
 
 Eigen::Vector4f pclToRviz(Eigen::Vector4f pclPoint) {
 
     Eigen::Vector4f rvizPoint;
 
-    //TODO: about 4cm off
+    //TODO: about 2.5 cm off
     rvizPoint[0] = pclPoint[2];
     rvizPoint[1] = -(pclPoint[0] + 0.025);
     rvizPoint[2] = -pclPoint[1];
@@ -152,7 +153,7 @@ visualization_msgs::Marker getMarkerForObject(Eigen::Vector4f point, int id) {
 
 }
 
-vision_msgs::Point convert(Eigen::Vector3f pt) {
+vision_msgs::Point convertToPoint(Eigen::Vector3f pt) {
 
     vision_msgs::Point result;
     result.x = pt[0];
@@ -162,7 +163,7 @@ vision_msgs::Point convert(Eigen::Vector3f pt) {
     return result;
 }
 
-void flatten(pcl::PointCloud<pcl::PointXYZRGB>::Ptr plane) {
+void flattenPlaneToLine(pcl::PointCloud<pcl::PointXYZRGB>::Ptr plane) {
 
     for (size_t i = 0; i < plane->points.size(); ++i) {
         plane->points[i].y = 0.0;
@@ -173,46 +174,11 @@ Eigen::Vector3f project(Eigen::Vector4f p3d) {
 
     Eigen::Vector3f p2d;
 
-    p2d[0] = (fx * p3d[0]/p3d[2] + cx);
-    p2d[1] = (fy * p3d[1]/p3d[2] + cy);
+    p2d[0] = (C[0] * p3d[0]/p3d[2] + C[2]);
+    p2d[1] = (C[1] * p3d[1]/p3d[2] + C[3]);
     p2d[2] = p3d[2];
 
     return p2d;
-}
-
-vision_msgs::Points computeExtremePoints(Eigen::Vector4f min, Eigen::Vector4f max, Eigen::Vector4f ctr) {
-
-    vision_msgs::Points result;
-
-    // Calculate extreme values
-    Eigen::Vector4f ul;
-    ul[0] = min[0];
-    ul[1] = min[1];
-    ul[2] = ctr[2];
-
-    Eigen::Vector4f ur;
-    ur[0] = max[0];
-    ur[1] = min[1];
-    ur[2] = ctr[2];
-
-    Eigen::Vector4f ll;
-    ll[0] = min[0];
-    ll[1] = max[1];
-    ll[2] = ctr[2];
-
-    Eigen::Vector4f lr;
-    lr[0] = max[0];
-    lr[1] = max[1];
-    lr[2] = ctr[2];
-
-    // Project extrema onto plane
-
-    result.points.push_back(convert(project(ul)));
-    result.points.push_back(convert(project(ur)));
-    result.points.push_back(convert(project(ll)));
-    result.points.push_back(convert(project(lr)));
-
-    return result;
 }
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr passThroughZ(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input) {
@@ -232,7 +198,8 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr downsample(pcl::PointCloud<pcl::PointXYZR
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
 
-    pcl::VoxelGrid<pcl::PointXYZRGB> downsample;
+    //pcl::VoxelGrid<pcl::PointXYZRGB> downsample;
+    pcl::ApproximateVoxelGrid<pcl::PointXYZRGB> downsample;
     downsample.setInputCloud(input);
     downsample.setLeafSize(leafSize, leafSize, leafSize);
     downsample.filter(*output);
@@ -269,27 +236,27 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr plane(new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::search::KdTree<pcl::PointXYZRGB>::Ptr	search(new pcl::search::KdTree<pcl::PointXYZRGB>);
     segmentation.setOptimizeCoefficients(true);
     segmentation.setModelType(pcl::SACMODEL_PLANE);
     segmentation.setMethodType(pcl::SAC_RANSAC);
-    segmentation.setMaxIterations(1000);
-    segmentation.setDistanceThreshold(0.02);
+    segmentation.setMaxIterations(100);
+    segmentation.setDistanceThreshold(0.01); // 0.005 before
+    //segmentation.setSamplesMaxDist(0.1, search);
+    //segmentation.setProbability(0.99);
+    //segmentation.setEpsAngle(0.01);
 
     visualization_msgs::MarkerArray planeMarkers;
 
-    //int numPoints = (int) input->points.size();
+    int planeSize = 250;
     int i = 0;
     // While still planes in the scene
-    while (input->points.size() > 1000) {
+    while (input->points.size() > planeSize) {
 
         segmentation.setInputCloud(input);
         segmentation.segment(*inliers, *coefficients);
 
-        if (inliers->indices.size() == 0) {
-            //std::cout << "No planar model" << std::endl;
-            break;
-        } else if (inliers->indices.size() < 2000) {
-            //std::cout << "Planar model too small" << std::endl;
+        if (inliers->indices.size() == 0 || inliers->indices.size() < planeSize) {
             break;
         }
 
@@ -306,7 +273,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
         extract.filter(*plane);
 
         // Flatten plane into a line to get rid of height
-        flatten(plane);
+        flattenPlaneToLine(plane);
 
         Eigen::Vector4f minPoint, maxPoint;
         pcl::getMinMax3D(*plane, minPoint, maxPoint);
@@ -323,7 +290,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
 
     }
 
-    std::cout << "Publishing " << planeMarkers.markers.size() << " plane markers" << std::endl;
+    //std::cout << "Publishing " << planeMarkers.markers.size() << " plane markers" << std::endl;
 
     planePublisher.publish(planeMarkers);
 
@@ -338,9 +305,9 @@ std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> computeClusters(pcl::PointCl
 
     std::vector<pcl::PointIndices> clusterIndices;
     pcl::EuclideanClusterExtraction<pcl::PointXYZRGB> extract;
-    extract.setClusterTolerance(0.02); // 2cm
-    extract.setMinClusterSize(20);
-    extract.setMaxClusterSize(1000);
+    extract.setClusterTolerance(0.04); // 4cm
+    extract.setMinClusterSize(10);
+    extract.setMaxClusterSize(300);
     extract.setSearchMethod(tree);
     extract.setInputCloud(input);
     extract.extract(clusterIndices);
@@ -381,6 +348,20 @@ pcl::PointXYZHSV getCloudAverage(pcl::PointCloud<pcl::PointXYZHSV>::Ptr input) {
     avg.v /= input->points.size();
 
     return avg;
+}
+
+double getMaxSaturation(pcl::PointCloud<pcl::PointXYZHSV>::Ptr input) {
+
+    double maxSaturation = 0.0;
+    double saturation = 0.0;
+    for (size_t i = 0; i < input->points.size(); ++i) {
+        saturation = input->points[i].s;
+        if (saturation > maxSaturation) {
+            maxSaturation = saturation;
+        }
+    }
+
+    return maxSaturation;
 }
 
 Eigen::Matrix4f getTransformation() {
@@ -450,58 +431,41 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
     // Filter out everything below 1cm (floor) and above debris (15cm)
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughY = passThroughY(cloudTransformed);
-
     processedPublisher.publish(cloudPassthroughY);
 
-    // Transform back so the camera center is on the y-axis
-    //pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudUntransformed = untransform(cloudPassthroughY);
-
-    // Filter out planes
+    // Filter out planes and publish
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudFiltered = filterPlanes(cloudPassthroughY);
+    publisher.publish(cloudFiltered);
 
-    //std::cout << "Cloud size: " << cloudFiltered->points.size() << std::endl;
+    if (cloudFiltered->points.empty()) {
+        return;
+    }
 
+    // Detect clusters
     std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> clusters = computeClusters(cloudFiltered);
-
-    std::cout << "Clusters found: " << clusters.size() << std::endl;
 
     for (int i = 0; i < clusters.size(); ++i) {
 
-        //std::cout << "Cluster " << (i + 1) << std::endl;
+        std::cout << "Cluster " << (i + 1) << " size: " << clusters[i]->points.size() << std::endl;
 
-        //std::cout << "Size:"  << clusters[i]->points.size() << std::endl;
-
+        // Get cluster extreme points in y direction
         Eigen::Vector4f minPoint, maxPoint;
         pcl::getMinMax3D(*clusters[i], minPoint, maxPoint);
-        //std::cout << "Min y: " << minPoint[1] << std::endl;
-        //std::cout << "Max y: " << maxPoint[1] << std::endl;
+        double minY = -maxPoint[1];
+        double maxY = -minPoint[1];
 
-        double width = std::abs(std::abs(minPoint[0]) - std::abs(maxPoint[0]));
-        double height = std::abs(std::abs(minPoint[1]) - std::abs(maxPoint[1]));
-
-        //std::cout << "Width: " << width << std::endl;
-        //std::cout << "Height: " << height << std::endl;
-
-        //Eigen::Vector4f centroid;
-        //pcl::compute3DCentroid(*clusters[i], centroid);
-
-        //std::cout << "Centroid y: " << centroid[1] << std::endl;
-
-        if (minPoint[1] > -0.07 && minPoint[1] < -0.01) {
+        // Conforms to object position?
+        if (minY > 0.01 && minY < 0.05 && maxY > 0.01 && maxY < 0.055) {
 
             pcl::PointCloud<pcl::PointXYZHSV>::Ptr hsvCluster(new pcl::PointCloud<pcl::PointXYZHSV>);
 
             pcl::PointCloudXYZRGBtoXYZHSV(*clusters[i], *hsvCluster);
 
-            //computeSaturation(hsvCluster);
+            double maxSaturation = getMaxSaturation(hsvCluster);
 
-            pcl::PointXYZHSV avg = getCloudAverage(hsvCluster);
+            std::cout << "maxSaturation: " << maxSaturation << std::endl;
 
-            //std::cout << "(" << avg.h << ", " << avg.s << ", " << avg.v << ")" << std::endl;
-
-            if (avg.s > minSaturation) {
-
-                std::cout << "Object" << std::endl;
+            if (maxSaturation > minSaturation) {
 
                 // Reverse the transformation to get the pixel coordinates
                 pcl::PointCloud<pcl::PointXYZRGB>::Ptr untransformed = transform(clusters[i], transformation.inverse());
@@ -517,10 +481,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
                 Eigen::Vector3f p2d = project(centroid);
 
-                //std::cout << "Centroid: (" << x << ", " << y << ", " << z << ")" << std::endl;
-                //std::cout << "Pixels: (" << px << ", " << py << ")" << std::endl;
-
-                vision_msgs::Point point = convert(p2d);
+                vision_msgs::Point point = convertToPoint(p2d);
 
                 pointPublisher.publish(point);
 
@@ -528,33 +489,14 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
                 histogramPublisher.publish(histogram);
 
-
-                /*geometry_msgs::Point point;
-                point.x = p2d[0];
-                point.y = p2d[1];
-                point.z = p2d[2];
-                pointPublisher.publish(point);*/
-
-                //clusterPublisher.publish(hsvCluster);
-
             }
-
-
-        } else if (minPoint[1] < -0.07 && minPoint[1] > -0.15) {
-            //std::cout << "Debris" << std::endl;
-        } else {
-            //std::cout << "Wall or noise?" << std::endl;
         }
-
-        //cloudPublisher.publish(clusters[i]);
     }
-
-    publisher.publish(cloudFiltered);
 }
 
 int main (int argc, char** argv) {
 
-  ros::init (argc, argv, "voxel_grid");
+  ros::init (argc, argv, "detector");
   ros::NodeHandle nh;
 
   subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/camera/depth_registered/points", 1, cloudCallback);
@@ -566,13 +508,13 @@ int main (int argc, char** argv) {
   visualizationPublisher = nh.advertise<visualization_msgs::Marker>("/vision/object_marker", 1);
   planePublisher = nh.advertise<visualization_msgs::MarkerArray>("/vision/plane_markers", 1);
 
-  ros::spin();
+  //ros::spin();
 
-  /*ros::Rate r(100); // 10Hz
+  ros::Rate r(10); // 10Hz
 
   while (ros::ok()) {
       ros::spinOnce();
       r.sleep();
-  }*/
+  }
 
 }
