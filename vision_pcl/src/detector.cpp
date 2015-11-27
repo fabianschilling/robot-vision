@@ -22,6 +22,7 @@
 #include <pcl/common/transforms.h>
 #include <pcl/common/centroid.h>
 #include <pcl/common/common.h>
+#include <pcl/common/angles.h>
 
 // PCL Filters
 #include <pcl/filters/voxel_grid.h>
@@ -56,7 +57,7 @@ ros::Subscriber subscriber;
 
 
 // These need to be adjusted every time the plane changes
-static const double P[] = {0.000719245, -0.820329, -0.571891, 0.254666};
+static const double P[] = {-0.00412679, -0.822544, -0.568684, 0.254984};
 
 // Intrinsic camera parameters
 static const double C[] = {574.0527954101562, 574.0527954101562, 319.5, 239.5};
@@ -236,19 +237,22 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr plane(new pcl::PointCloud<pcl::PointXYZRGB>);
-    pcl::search::KdTree<pcl::PointXYZRGB>::Ptr	search(new pcl::search::KdTree<pcl::PointXYZRGB>);
+    //pcl::search::KdTree<pcl::PointXYZRGB>::Ptr search(new pcl::search::KdTree<pcl::PointXYZRGB>);
+    //search->setInputCloud(input);
     segmentation.setOptimizeCoefficients(true);
-    segmentation.setModelType(pcl::SACMODEL_PLANE);
+    segmentation.setModelType(pcl::SACMODEL_PARALLEL_PLANE);
     segmentation.setMethodType(pcl::SAC_RANSAC);
     segmentation.setMaxIterations(100);
-    segmentation.setDistanceThreshold(0.01); // 0.005 before
+    segmentation.setDistanceThreshold(0.005); // 0.005 before
+    segmentation.setAxis(Eigen::Vector3f(0.0, 1.0, 0.0));
+    segmentation.setEpsAngle(pcl::deg2rad(5.0));
+    //segmentation.setRadiusLimits(0.0, 0.00001); // 0-5 cm
     //segmentation.setSamplesMaxDist(0.1, search);
-    //segmentation.setProbability(0.99);
-    //segmentation.setEpsAngle(0.01);
+    segmentation.setProbability(0.99);
 
     visualization_msgs::MarkerArray planeMarkers;
 
-    int planeSize = 250;
+    int planeSize = 1500;
     int i = 0;
     // While still planes in the scene
     while (input->points.size() > planeSize) {
@@ -305,9 +309,9 @@ std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> computeClusters(pcl::PointCl
 
     std::vector<pcl::PointIndices> clusterIndices;
     pcl::EuclideanClusterExtraction<pcl::PointXYZRGB> extract;
-    extract.setClusterTolerance(0.04); // 4cm
-    extract.setMinClusterSize(10);
-    extract.setMaxClusterSize(300);
+    extract.setClusterTolerance(0.04); // 2cm
+    extract.setMinClusterSize(20);
+    extract.setMaxClusterSize(400);
     extract.setSearchMethod(tree);
     extract.setInputCloud(input);
     extract.extract(clusterIndices);
@@ -444,6 +448,8 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
     // Detect clusters
     std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> clusters = computeClusters(cloudFiltered);
 
+    visualization_msgs::MarkerArray objectMarkers;
+
     for (int i = 0; i < clusters.size(); ++i) {
 
         std::cout << "Cluster " << (i + 1) << " size: " << clusters[i]->points.size() << std::endl;
@@ -454,8 +460,10 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
         double minY = -maxPoint[1];
         double maxY = -minPoint[1];
 
+        std::cout << "(minY = " << minY << ", maxY = " << maxY << ")" << std::endl;
+
         // Conforms to object position?
-        if (minY > 0.01 && minY < 0.05 && maxY > 0.01 && maxY < 0.055) {
+        if (minY > 0.01 && minY < 0.02 && maxY > 0.02 && maxY < 0.055) {
 
             pcl::PointCloud<pcl::PointXYZHSV>::Ptr hsvCluster(new pcl::PointCloud<pcl::PointXYZHSV>);
 
@@ -476,8 +484,9 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
                 Eigen::Vector4f vizCentroid;
                 pcl::compute3DCentroid(*clusters[i], vizCentroid);
 
-                visualization_msgs::Marker objectMarker = getMarkerForObject(vizCentroid, 0);
-                visualizationPublisher.publish(objectMarker);
+                visualization_msgs::Marker objectMarker = getMarkerForObject(vizCentroid, i);
+                objectMarkers.markers.push_back(objectMarker);
+                //visualizationPublisher.publish(objectMarker);
 
                 Eigen::Vector3f p2d = project(centroid);
 
@@ -492,6 +501,8 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
             }
         }
     }
+
+    visualizationPublisher.publish(objectMarkers);
 }
 
 int main (int argc, char** argv) {
@@ -505,7 +516,7 @@ int main (int argc, char** argv) {
   processedPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZHSV> >("/vision/processed", 1);
   pointPublisher = nh.advertise<vision_msgs::Point>("/vision/object_centroid", 1);
   histogramPublisher = nh.advertise<vision_msgs::Histogram>("/vision/histogram", 1);
-  visualizationPublisher = nh.advertise<visualization_msgs::Marker>("/vision/object_marker", 1);
+  visualizationPublisher = nh.advertise<visualization_msgs::MarkerArray>("/vision/object_markers", 1);
   planePublisher = nh.advertise<visualization_msgs::MarkerArray>("/vision/plane_markers", 1);
 
   //ros::spin();
