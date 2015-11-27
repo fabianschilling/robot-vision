@@ -73,7 +73,7 @@ Eigen::Matrix4f getTransformation() {
     return transformation;
 }
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr passThroughZ(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input) {
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr passthroughZ(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input) {
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
 
@@ -98,7 +98,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr downsample(pcl::PointCloud<pcl::PointXYZR
     return output;
 }
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr passThroughY(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr passthroughY(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
 
@@ -123,7 +123,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr transform(pcl::PointCloud<pcl::PointXYZRG
 void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud) {
 
     // Filter out everything farther than 1m
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughZ = passThroughZ(inputCloud);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughZ = passthroughZ(inputCloud);
 
     // Downsample cloud
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudDownsampled = downsample(cloudPassthroughZ);
@@ -133,7 +133,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudTransformed = transform(cloudDownsampled, transformation);
 
     // Filter out everything below 1cm (floor) and above debris (15cm)
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughY = passThroughY(cloudTransformed);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughY = passthroughY(cloudTransformed);
 
     publisher.publish(cloudPassthroughY);
 }

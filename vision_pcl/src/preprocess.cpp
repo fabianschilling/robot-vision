@@ -22,7 +22,7 @@ double const leafSize = 0.005;
 double const minZ = 0.0; // 0m
 double const maxZ = 1.0; // 1m
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr passThroughZ(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input) {
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr passthroughZ(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input) {
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
 
@@ -65,7 +65,7 @@ double getNanRatio(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
 void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud) {
 
     // Filter out everything farther than 1m
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughZ = passThroughZ(inputCloud);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughZ = passthroughZ(inputCloud);
 
     // Downsample cloud
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudDownsampled = downsample(cloudPassthroughZ);

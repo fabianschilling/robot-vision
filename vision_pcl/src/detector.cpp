@@ -29,6 +29,7 @@
 #include <pcl/filters/approximate_voxel_grid.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/extract_indices.h>
+#include <pcl/filters/statistical_outlier_removal.h>
 
 // PCL KdTree
 #include <pcl/kdtree/kdtree.h>
@@ -53,9 +54,6 @@ ros::Publisher visualizationPublisher;
 ros::Publisher planePublisher;
 ros::Subscriber subscriber;
 
-// Global PointCloud variables
-
-
 // These need to be adjusted every time the plane changes
 static const double P[] = {-0.00412679, -0.822544, -0.568684, 0.254984};
 
@@ -69,7 +67,7 @@ double const minY = -0.30; // 30cm (may want the wall information too!
 //double const minY = -0.15; // 15cm
 double const maxY = -0.01; // 1cm
 
-double const minSaturation = 0.4;
+double const minSaturation = 0.3;
 
 Eigen::Vector4f pclToRviz(Eigen::Vector4f pclPoint) {
 
@@ -154,6 +152,30 @@ visualization_msgs::Marker getMarkerForObject(Eigen::Vector4f point, int id) {
 
 }
 
+vision_msgs::Histogram computeHistogram(pcl::PointCloud<pcl::PointXYZHSV>::Ptr input) {
+
+    vision_msgs::Histogram result;
+
+    std::vector<double> histogram(360);
+    size_t size = input->points.size();
+
+    for (size_t i = 0; i < size; ++i) {
+
+        if (input->points[i].s > minSaturation && !isnan(input->points[i].x) && !isnan(input->points[i].y) && !isnan(input->points[i].z)) {
+            int index = input->points[i].h;
+            histogram[index] += 1.0;
+        }
+    }
+
+    for (size_t i = 0; i < histogram.size(); ++i) {
+        histogram[i] /= (double) size;
+    }
+
+    result.histogram = histogram;
+
+    return result;
+}
+
 vision_msgs::Point convertToPoint(Eigen::Vector3f pt) {
 
     vision_msgs::Point result;
@@ -180,152 +202,6 @@ Eigen::Vector3f project(Eigen::Vector4f p3d) {
     p2d[2] = p3d[2];
 
     return p2d;
-}
-
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr passThroughZ(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input) {
-
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
-
-    pcl::PassThrough<pcl::PointXYZRGB> passthrough;
-    passthrough.setInputCloud(input);
-    passthrough.setFilterFieldName("z");
-    passthrough.setFilterLimits(minZ, maxZ); // 0-1m
-    passthrough.filter(*output);
-
-    return output;
-}
-
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr downsample(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
-
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
-
-    //pcl::VoxelGrid<pcl::PointXYZRGB> downsample;
-    pcl::ApproximateVoxelGrid<pcl::PointXYZRGB> downsample;
-    downsample.setInputCloud(input);
-    downsample.setLeafSize(leafSize, leafSize, leafSize);
-    downsample.filter(*output);
-
-    return output;
-}
-
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr passThroughY(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
-
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
-
-    pcl::PassThrough<pcl::PointXYZRGB> passthrough;
-    passthrough.setInputCloud(input);
-    passthrough.setFilterFieldName("y");
-    passthrough.setFilterLimits(minY, maxY); // 1-15cm
-    passthrough.filter(*output);
-
-    return output;
-}
-
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr transform(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input, Eigen::Matrix4f transformation) {
-
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
-
-    pcl::transformPointCloud(*input, *output, transformation);
-
-    return output;
-}
-
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
-
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
-    pcl::SACSegmentation<pcl::PointXYZRGB> segmentation;
-    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
-    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr plane(new pcl::PointCloud<pcl::PointXYZRGB>);
-    //pcl::search::KdTree<pcl::PointXYZRGB>::Ptr search(new pcl::search::KdTree<pcl::PointXYZRGB>);
-    //search->setInputCloud(input);
-    segmentation.setOptimizeCoefficients(true);
-    segmentation.setModelType(pcl::SACMODEL_PARALLEL_PLANE);
-    segmentation.setMethodType(pcl::SAC_RANSAC);
-    segmentation.setMaxIterations(100);
-    segmentation.setDistanceThreshold(0.005); // 0.005 before
-    segmentation.setAxis(Eigen::Vector3f(0.0, 1.0, 0.0));
-    segmentation.setEpsAngle(pcl::deg2rad(5.0));
-    //segmentation.setRadiusLimits(0.0, 0.00001); // 0-5 cm
-    //segmentation.setSamplesMaxDist(0.1, search);
-    segmentation.setProbability(0.99);
-
-    visualization_msgs::MarkerArray planeMarkers;
-
-    int planeSize = 1500;
-    int i = 0;
-    // While still planes in the scene
-    while (input->points.size() > planeSize) {
-
-        segmentation.setInputCloud(input);
-        segmentation.segment(*inliers, *coefficients);
-
-        if (inliers->indices.size() == 0 || inliers->indices.size() < planeSize) {
-            break;
-        }
-
-        std::cout << "Iteration " << (i + 1) << ": Removing plane of size: " << inliers->indices.size() << std::endl;
-
-        // Extract the planar inliers from the input cloud
-        pcl::ExtractIndices<pcl::PointXYZRGB> extract;
-        //extract.setKeepOrganized(true); // important for pixel conversion
-        extract.setInputCloud(input);
-        extract.setIndices(inliers);
-        extract.setNegative(false);
-
-         // Get the points associated with the planar surface
-        extract.filter(*plane);
-
-        // Flatten plane into a line to get rid of height
-        flattenPlaneToLine(plane);
-
-        Eigen::Vector4f minPoint, maxPoint;
-        pcl::getMinMax3D(*plane, minPoint, maxPoint);
-
-        visualization_msgs::Marker planeMarker = getmarkerForPlane(minPoint, maxPoint, coefficients, i);
-        planeMarkers.markers.push_back(planeMarker);
-        i++;
-
-        // Remove the planar inliers, extract the rest
-        extract.setNegative(true);
-        extract.filter(*filtered);
-        *input = *filtered;
-
-
-    }
-
-    //std::cout << "Publishing " << planeMarkers.markers.size() << " plane markers" << std::endl;
-
-    planePublisher.publish(planeMarkers);
-
-    return input;
-
-}
-
-std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> computeClusters(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
-
-    pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGB>);
-    tree->setInputCloud(input);
-
-    std::vector<pcl::PointIndices> clusterIndices;
-    pcl::EuclideanClusterExtraction<pcl::PointXYZRGB> extract;
-    extract.setClusterTolerance(0.04); // 2cm
-    extract.setMinClusterSize(20);
-    extract.setMaxClusterSize(400);
-    extract.setSearchMethod(tree);
-    extract.setInputCloud(input);
-    extract.extract(clusterIndices);
-
-    std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr > clusters;
-
-    for (std::vector<pcl::PointIndices>::const_iterator it = clusterIndices.begin(); it != clusterIndices.end(); ++it) {
-
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZRGB>(*input, it->indices));
-
-        clusters.push_back(cluster);
-    }
-
-    return clusters;
 }
 
 pcl::PointXYZHSV getCloudAverage(pcl::PointCloud<pcl::PointXYZHSV>::Ptr input) {
@@ -383,30 +259,6 @@ Eigen::Matrix4f getTransformation() {
     return transformation;
 }
 
-vision_msgs::Histogram computeHistogram(pcl::PointCloud<pcl::PointXYZHSV>::Ptr input) {
-
-    vision_msgs::Histogram result;
-
-    std::vector<double> histogram(360);
-    size_t size = input->points.size();
-
-    for (size_t i = 0; i < size; ++i) {
-
-        if (input->points[i].s > minSaturation && !isnan(input->points[i].x) && !isnan(input->points[i].y) && !isnan(input->points[i].z)) {
-            int index = input->points[i].h;
-            histogram[index] += 1.0;
-        }
-    }
-
-    for (size_t i = 0; i < histogram.size(); ++i) {
-        histogram[i] /= (double) size;
-    }
-
-    result.histogram = histogram;
-
-    return result;
-}
-
 double getNanRatio(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input) {
 
     double nanSum = 0.0;
@@ -421,10 +273,171 @@ double getNanRatio(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input) {
 
 }
 
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr passthroughZ(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input) {
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
+
+    pcl::PassThrough<pcl::PointXYZRGB> passthrough;
+    passthrough.setInputCloud(input);
+    passthrough.setFilterFieldName("z");
+    passthrough.setFilterLimits(minZ, maxZ); // 0-1m
+    passthrough.filter(*output);
+
+    return output;
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr downsample(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
+
+    //pcl::VoxelGrid<pcl::PointXYZRGB> downsample;
+    pcl::ApproximateVoxelGrid<pcl::PointXYZRGB> downsample;
+    downsample.setInputCloud(input);
+    downsample.setLeafSize(leafSize, leafSize, leafSize);
+    downsample.filter(*output);
+
+    return output;
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr passthroughY(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
+
+    pcl::PassThrough<pcl::PointXYZRGB> passthrough;
+    passthrough.setInputCloud(input);
+    passthrough.setFilterFieldName("y");
+    passthrough.setFilterLimits(minY, maxY); // 1-15cm
+    passthrough.filter(*output);
+
+    return output;
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr transform(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input, Eigen::Matrix4f transformation) {
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
+
+    pcl::transformPointCloud(*input, *output, transformation);
+
+    return output;
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::SACSegmentation<pcl::PointXYZRGB> segmentation;
+    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr plane(new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::search::KdTree<pcl::PointXYZRGB>::Ptr search(new pcl::search::KdTree<pcl::PointXYZRGB>);
+    segmentation.setOptimizeCoefficients(true);
+    segmentation.setModelType(pcl::SACMODEL_PARALLEL_PLANE); // remove planes perpendicular to ground
+    segmentation.setMethodType(pcl::SAC_RANSAC);
+    segmentation.setMaxIterations(100);
+    segmentation.setDistanceThreshold(0.005); // 0.005 before
+    segmentation.setAxis(Eigen::Vector3f(0.0, 1.0, 0.0));
+    segmentation.setEpsAngle(pcl::deg2rad(5.0)); // plane angle can be 5 degrees off
+    segmentation.setProbability(0.99);
+
+    visualization_msgs::MarkerArray planeMarkers;
+
+    int planeSize = 400;
+    int i = 0;
+
+    // While still planes in the scene
+    //while (input->points.size() > planeSize) {
+    while (true) {
+
+        // Search only in a radius of 1 cm
+        search->setInputCloud(input);
+        segmentation.setSamplesMaxDist(0.01, search);
+
+        segmentation.setInputCloud(input);
+        segmentation.segment(*inliers, *coefficients);
+
+        if (inliers->indices.size() == 0 || inliers->indices.size() < planeSize) {
+            break;
+        }
+
+        std::cout << "Iteration " << (i + 1) << ": Removing plane of size: " << inliers->indices.size() << std::endl;
+
+        // Extract the planar inliers from the input cloud
+        pcl::ExtractIndices<pcl::PointXYZRGB> extract;
+        extract.setInputCloud(input);
+        extract.setIndices(inliers);
+        extract.setNegative(false);
+
+         // Get the points associated with the planar surface
+        extract.filter(*plane);
+
+        // Flatten plane into a line to get rid of height
+        flattenPlaneToLine(plane);
+
+        Eigen::Vector4f minPoint, maxPoint;
+        pcl::getMinMax3D(*plane, minPoint, maxPoint);
+
+        visualization_msgs::Marker planeMarker = getmarkerForPlane(minPoint, maxPoint, coefficients, i);
+        planeMarkers.markers.push_back(planeMarker);
+        i++;
+
+        // Remove the planar inliers, extract the rest
+        extract.setNegative(true);
+        extract.filter(*filtered);
+        *input = *filtered;
+
+
+    }
+
+    //std::cout << "Publishing " << planeMarkers.markers.size() << " plane markers" << std::endl;
+
+    planePublisher.publish(planeMarkers);
+
+    return input;
+
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr removeOutliers(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output (new pcl::PointCloud<pcl::PointXYZRGB>);
+
+    pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
+    sor.setInputCloud(input);
+    sor.setMeanK(50);
+    sor.setStddevMulThresh(1.0);
+    sor.filter(*output);
+
+    return output;
+}
+
+std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> extractClusters(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input) {
+
+    pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGB>);
+    tree->setInputCloud(input);
+
+    std::vector<pcl::PointIndices> clusterIndices;
+    pcl::EuclideanClusterExtraction<pcl::PointXYZRGB> extract;
+    extract.setClusterTolerance(0.04); // 4cm
+    extract.setMinClusterSize(30);
+    extract.setMaxClusterSize(400);
+    extract.setSearchMethod(tree);
+    extract.setInputCloud(input);
+    extract.extract(clusterIndices);
+
+    std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr > clusters;
+
+    for (std::vector<pcl::PointIndices>::const_iterator it = clusterIndices.begin(); it != clusterIndices.end(); ++it) {
+
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZRGB>(*input, it->indices));
+
+        clusters.push_back(cluster);
+    }
+
+    return clusters;
+}
+
 void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud) {
 
     // Filter out everything farther than 1m
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughZ = passThroughZ(inputCloud);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughZ = passthroughZ(inputCloud);
 
     // Downsample cloud
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudDownsampled = downsample(cloudPassthroughZ);
@@ -434,19 +447,20 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudTransformed = transform(cloudDownsampled, transformation);
 
     // Filter out everything below 1cm (floor) and above debris (15cm)
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughY = passThroughY(cloudTransformed);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughY = passthroughY(cloudTransformed);
     processedPublisher.publish(cloudPassthroughY);
 
     // Filter out planes and publish
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudFiltered = filterPlanes(cloudPassthroughY);
-    publisher.publish(cloudFiltered);
 
-    if (cloudFiltered->points.empty()) {
-        return;
-    }
+    if (cloudFiltered->points.empty()) { return;}
+
+    // Remove outliers
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudOutliers = removeOutliers(cloudFiltered);
+    publisher.publish(cloudOutliers);
 
     // Detect clusters
-    std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> clusters = computeClusters(cloudFiltered);
+    std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> clusters = extractClusters(cloudOutliers);
 
     visualization_msgs::MarkerArray objectMarkers;
 
@@ -505,6 +519,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
     visualizationPublisher.publish(objectMarkers);
 }
 
+
 int main (int argc, char** argv) {
 
   ros::init (argc, argv, "detector");
@@ -521,7 +536,7 @@ int main (int argc, char** argv) {
 
   //ros::spin();
 
-  ros::Rate r(10); // 10Hz
+  ros::Rate r(5); // 10Hz
 
   while (ros::ok()) {
       ros::spinOnce();
