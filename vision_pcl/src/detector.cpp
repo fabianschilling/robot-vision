@@ -416,12 +416,6 @@ std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> extractClusters(pcl::PointCl
     return clusters;
 }
 
-vision_msgs::Box getBox(Eigen::Vector4f centroid) {
-
-    vision_msgs::Box box;
-
-}
-
 vision_msgs::Detection getDetection(Eigen::Vector4f centroid, vision_msgs::Histogram histogram) {
 
     Eigen::Vector3f p2d = project(centroid);
