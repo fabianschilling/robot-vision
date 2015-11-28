@@ -1,0 +1,7 @@
+set(_CATKIN_CURRENT_PACKAGE "vision_pcl")
+set(vision_pcl_MAINTAINER "Fabian Schilling <fabsch@kth.se>")
+set(vision_pcl_DEPRECATED "")
+set(vision_pcl_VERSION "0.0.0")
+set(vision_pcl_BUILD_DEPENDS "pcl_conversions" "pcl_ros" "roscpp" "sensor_msgs" "geometry_msgs" "libpcl-all-dev")
+set(vision_pcl_RUN_DEPENDS "pcl_conversions" "pcl_ros" "roscpp" "sensor_msgs" "geometry_msgs" "libpcl-all")
+set(vision_pcl_BUILDTOOL_DEPENDS "catkin")

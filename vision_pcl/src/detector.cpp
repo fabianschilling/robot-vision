@@ -3,13 +3,9 @@
 
 // Messages
 #include <sensor_msgs/PointCloud2.h>
-#include <geometry_msgs/Point.h>
-#include <vision_msgs/Rect.h>
-#include <vision_msgs/Point.h>
-#include <vision_msgs/Points.h>
-#include <vision_msgs/Histogram.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <vision_msgs/Detection.h>
 
 // PCL
 #include <pcl_ros/point_cloud.h>
@@ -47,11 +43,10 @@
 
 // Global subscriber & publisher variables
 ros::Publisher publisher;
-ros::Publisher pointPublisher;
 ros::Publisher processedPublisher;
-ros::Publisher histogramPublisher;
 ros::Publisher visualizationPublisher;
 ros::Publisher planePublisher;
+ros::Publisher detectionPublisher;
 ros::Subscriber subscriber;
 
 // These need to be adjusted every time the plane changes
@@ -160,11 +155,8 @@ vision_msgs::Histogram computeHistogram(pcl::PointCloud<pcl::PointXYZHSV>::Ptr i
     size_t size = input->points.size();
 
     for (size_t i = 0; i < size; ++i) {
-
-        if (input->points[i].s > minSaturation && !isnan(input->points[i].x) && !isnan(input->points[i].y) && !isnan(input->points[i].z)) {
             int index = input->points[i].h;
             histogram[index] += 1.0;
-        }
     }
 
     for (size_t i = 0; i < histogram.size(); ++i) {
@@ -172,16 +164,6 @@ vision_msgs::Histogram computeHistogram(pcl::PointCloud<pcl::PointXYZHSV>::Ptr i
     }
 
     result.histogram = histogram;
-
-    return result;
-}
-
-vision_msgs::Point convertToPoint(Eigen::Vector3f pt) {
-
-    vision_msgs::Point result;
-    result.x = pt[0];
-    result.y = pt[1];
-    result.z = pt[2];
 
     return result;
 }
@@ -358,7 +340,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
             break;
         }
 
-        std::cout << "Iteration " << (i + 1) << ": Removing plane of size: " << inliers->indices.size() << std::endl;
+        //std::cout << "Iteration " << (i + 1) << ": Removing plane of size: " << inliers->indices.size() << std::endl;
 
         // Extract the planar inliers from the input cloud
         pcl::ExtractIndices<pcl::PointXYZRGB> extract;
@@ -434,6 +416,35 @@ std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> extractClusters(pcl::PointCl
     return clusters;
 }
 
+vision_msgs::Box getBox(Eigen::Vector4f centroid) {
+
+    vision_msgs::Box box;
+
+}
+
+vision_msgs::Detection getDetection(Eigen::Vector4f centroid, vision_msgs::Histogram histogram) {
+
+    Eigen::Vector3f p2d = project(centroid);
+
+    vision_msgs::Detection detection;
+    vision_msgs::Centroid ctr;
+    ctr.x = p2d[0];
+    ctr.y = p2d[1];
+    ctr.z = p2d[2];
+    detection.centroid = ctr;
+    vision_msgs::Box box;
+    box.size = int(38.5 / p2d[2]);
+    box.x = int(p2d[0] - (box.size / 2.0));
+    box.y = int(p2d[1] - (box.size / 2.0));
+
+    detection.box = box;
+
+    detection.histogram = histogram;
+    detectionPublisher.publish(detection);
+
+    return detection;
+}
+
 void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud) {
 
     // Filter out everything farther than 1m
@@ -466,7 +477,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
     for (int i = 0; i < clusters.size(); ++i) {
 
-        std::cout << "Cluster " << (i + 1) << " size: " << clusters[i]->points.size() << std::endl;
+        //std::cout << "Cluster " << (i + 1) << " size: " << clusters[i]->points.size() << std::endl;
 
         // Get cluster extreme points in y direction
         Eigen::Vector4f minPoint, maxPoint;
@@ -474,7 +485,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
         double minY = -maxPoint[1];
         double maxY = -minPoint[1];
 
-        std::cout << "(minY = " << minY << ", maxY = " << maxY << ")" << std::endl;
+        //std::cout << "(minY = " << minY << ", maxY = " << maxY << ")" << std::endl;
 
         // Conforms to object position?
         if (minY > 0.01 && minY < 0.02 && maxY > 0.02 && maxY < 0.055) {
@@ -485,7 +496,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
             double maxSaturation = getMaxSaturation(hsvCluster);
 
-            std::cout << "maxSaturation: " << maxSaturation << std::endl;
+            //std::cout << "maxSaturation: " << maxSaturation << std::endl;
 
             if (maxSaturation > minSaturation) {
 
@@ -502,15 +513,12 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
                 objectMarkers.markers.push_back(objectMarker);
                 //visualizationPublisher.publish(objectMarker);
 
-                Eigen::Vector3f p2d = project(centroid);
-
-                vision_msgs::Point point = convertToPoint(p2d);
-
-                pointPublisher.publish(point);
-
                 vision_msgs::Histogram histogram = computeHistogram(hsvCluster);
+                vision_msgs::Detection detection = getDetection(centroid, histogram);
+                detectionPublisher.publish(detection);
 
-                histogramPublisher.publish(histogram);
+
+                std::cout << "Distance: " << centroid[2] << std::endl;
 
             }
         }
@@ -529,10 +537,9 @@ int main (int argc, char** argv) {
 
   publisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/vision/filtered", 1);
   processedPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZHSV> >("/vision/processed", 1);
-  pointPublisher = nh.advertise<vision_msgs::Point>("/vision/object_centroid", 1);
-  histogramPublisher = nh.advertise<vision_msgs::Histogram>("/vision/histogram", 1);
   visualizationPublisher = nh.advertise<visualization_msgs::MarkerArray>("/vision/object_markers", 1);
   planePublisher = nh.advertise<visualization_msgs::MarkerArray>("/vision/plane_markers", 1);
+  detectionPublisher = nh.advertise<vision_msgs::Detection>("/vision/detection", 1);
 
   //ros::spin();
 

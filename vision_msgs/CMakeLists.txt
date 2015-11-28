@@ -10,6 +10,10 @@ add_message_files(
     Point.msg
     Points.msg
     Histogram.msg
+    Box.msg
+    Centroid.msg
+    Object.msg
+    Detection.msg
 )
 
 generate_messages(

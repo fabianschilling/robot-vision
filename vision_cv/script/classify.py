@@ -12,14 +12,14 @@ class Visualizer:
 
 	def __init__(self):
 
-		orange = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_cv/script/orange.txt')
-		yellow = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_cv/script/yellow.txt')
-		lightgreen = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_cv/script/lightgreen.txt')
-		green = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_cv/script/green.txt')
-		lightblue = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_cv/script/lightblue.txt')
-		blue = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_cv/script/blue.txt')
-		purple = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_cv/script/purple.txt')
-		red = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_cv/script/red.txt')
+		orange = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_data/color/old/orange/orange.txt')
+		yellow = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_data/color/old/yellow/yellow.txt')
+		lightgreen = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_data/color/old/lgreen/lgreen.txt')
+		green = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_data/color/old/green/green.txt')
+		lightblue = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_data/color/old/lblue/lblue.txt')
+		blue = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_data/color/old/blue/blue.txt')
+		purple = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_data/color/old/purple/purple.txt')
+		red = np.loadtxt('/home/fabian/catkin_ws/src/ras_vision/vision_data/color/old/red/red.txt')
 		
 		self.colornames = ['orange' , 'yellow' , 'lightgreen' , 'green', 'lightblue', 'blue', 'purple', 'red']
 		self.colors = [orange, yellow, lightgreen, green, lightblue, blue, purple, red]

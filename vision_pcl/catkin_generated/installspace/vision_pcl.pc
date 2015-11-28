@@ -1,0 +1,8 @@
+prefix=/usr/local
+
+Name: vision_pcl
+Description: Description of vision_pcl
+Version: 0.0.0
+Cflags: 
+Libs: -L/usr/local/lib 
+Requires: 
