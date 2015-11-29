@@ -50,7 +50,7 @@ ros::Publisher detectionPublisher;
 ros::Subscriber subscriber;
 
 // These need to be adjusted every time the plane changes
-static const double P[] = {-0.00412679, -0.822544, -0.568684, 0.254984};
+static const double P[] = {-0.00804313, -0.836338, -0.548144, 0.250384};
 
 // Intrinsic camera parameters
 static const double C[] = {574.0527954101562, 574.0527954101562, 319.5, 239.5};
