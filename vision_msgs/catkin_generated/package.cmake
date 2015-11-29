@@ -1,7 +1,0 @@
-set(_CATKIN_CURRENT_PACKAGE "vision_msgs")
-set(vision_msgs_MAINTAINER "Fabian Schilling <fabsch@kth.se>")
-set(vision_msgs_DEPRECATED "")
-set(vision_msgs_VERSION "0.1.0")
-set(vision_msgs_BUILD_DEPENDS "message_generation" "std_msgs" "sensor_msgs" "geometry_msgs")
-set(vision_msgs_RUN_DEPENDS "message_runtime" "std_msgs" "sensor_msgs" "geometry_msgs")
-set(vision_msgs_BUILDTOOL_DEPENDS "catkin")

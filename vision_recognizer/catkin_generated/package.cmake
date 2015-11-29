@@ -1,7 +1,0 @@
-set(_CATKIN_CURRENT_PACKAGE "vision_recognizer")
-set(vision_recognizer_MAINTAINER "Fabian Schilling <fabsch@kth.se>")
-set(vision_recognizer_DEPRECATED "")
-set(vision_recognizer_VERSION "0.0.0")
-set(vision_recognizer_BUILD_DEPENDS "rospy" "roscpp" "sensor_msgs" "std_msgs" "message_generation" "image_transport" "opencv2" "libpcl-all-dev")
-set(vision_recognizer_RUN_DEPENDS "rospy" "roscpp" "std_msgs" "sensor_msgs" "message_runtime" "image_transport" "opencv2" "libpcl-all")
-set(vision_recognizer_BUILDTOOL_DEPENDS "catkin")

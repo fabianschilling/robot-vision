@@ -1,2 +1,0 @@
-set(vision_recognizer_MESSAGE_FILES "/home/fabian/catkin_ws/src/ras_vision/vision_recognizer/msg/Rect.msg")
-set(vision_recognizer_SERVICE_FILES "")
