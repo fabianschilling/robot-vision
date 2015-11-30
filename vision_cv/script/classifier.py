@@ -33,6 +33,7 @@ class Classifier:
 		self.color_subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.color_callback, queue_size=1)
 		self.depth_subscriber = rospy.Subscriber('/camera/depth/image', Image, self.depth_callback, queue_size=1)
 		self.detection_subsriber = rospy.Subscriber('/vision/detection', Detection, self.detection_callback, queue_size=1)
+		self.detection_publisher = rospy.Publisher('/vision/object')
 
 		self.bridge = CvBridge()
 
@@ -44,6 +45,8 @@ class Classifier:
 		self.depth_image = np.array(self.bridge.imgmsg_to_cv2(message), dtype=np.float32)
 
 	def detection_callback(self, message):
+
+		histogram = message.histogram.histogram
 
 		color = self.classify_color(message.histogram.histogram)
 		material = self.classify_material(message.box, message.centroid)

@@ -50,7 +50,7 @@ ros::Publisher detectionPublisher;
 ros::Subscriber subscriber;
 
 // These need to be adjusted every time the plane changes
-static const double P[] = {-0.00804313, -0.836338, -0.548144, 0.250384};
+static const double P[] = {0.0230131, -0.801568, -0.597472, 0.257488};
 
 // Intrinsic camera parameters
 static const double C[] = {574.0527954101562, 574.0527954101562, 319.5, 239.5};
@@ -63,6 +63,7 @@ double const minY = -0.30; // 30cm (may want the wall information too!
 double const maxY = -0.01; // 1cm
 
 double const minSaturation = 0.3;
+
 
 Eigen::Vector4f pclToRviz(Eigen::Vector4f pclPoint) {
 
@@ -443,17 +444,22 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
     // Filter out everything farther than 1m
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughZ = passthroughZ(inputCloud);
+    if (cloudPassthroughZ->points.empty()) { return; }
 
     // Downsample cloud
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudDownsampled = downsample(cloudPassthroughZ);
+    if (cloudDownsampled->points.empty()) { return; }
 
     // Transform (rotate & translate) so the ground is on the y-axis
     Eigen::Matrix4f transformation = getTransformation();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudTransformed = transform(cloudDownsampled, transformation);
+    if (cloudTransformed->points.empty()) { return; }
 
     // Filter out everything below 1cm (floor) and above debris (15cm)
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudPassthroughY = passthroughY(cloudTransformed);
     processedPublisher.publish(cloudPassthroughY);
+
+    if (cloudPassthroughY->points.empty()) { return;}
 
     // Filter out planes and publish
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudFiltered = filterPlanes(cloudPassthroughY);
@@ -468,6 +474,8 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
     std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> clusters = extractClusters(cloudOutliers);
 
     visualization_msgs::MarkerArray objectMarkers;
+
+    int detections = 0;
 
     for (int i = 0; i < clusters.size(); ++i) {
 
@@ -493,6 +501,8 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
             //std::cout << "maxSaturation: " << maxSaturation << std::endl;
 
             if (maxSaturation > minSaturation) {
+
+                detections++; // Increase number of detections
 
                 // Reverse the transformation to get the pixel coordinates
                 pcl::PointCloud<pcl::PointXYZRGB>::Ptr untransformed = transform(clusters[i], transformation.inverse());
