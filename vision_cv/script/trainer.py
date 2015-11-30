@@ -15,66 +15,62 @@ def get_color_data():
 	
 	color_names = ['orange', 'yellow', 'lightgreen', 'green', 'lightblue', 'blue', 'purple', 'red']
 
+	color_data = []
+	color_targets = []
 
-	# Get training data
-	orange = np.loadtxt(datapath + 'orange.txt')
-	yellow = np.loadtxt(datapath + 'yellow.txt')
-	lightgreen = np.loadtxt(datapath + 'lightgreen.txt')
-	green = np.loadtxt(datapath + 'green.txt')
-	lightblue = np.loadtxt(datapath + 'lightblue.txt')
-	blue = np.loadtxt(datapath + 'blue.txt')
-	purple = np.loadtxt(datapath + 'purple.txt')
-	red = np.loadtxt(datapath + 'red.txt')
+	for i, col in enumerate(color_names):
+		data = np.loadtxt(datapath + color_names[i] + '.txt')
+		color_data.append(data)
+		n_samples, _ = data.shape
+		color_targets.append(np.zeros(n_samples) + i)
 
-	# Get number of samples of every dataset
-	oragnge_n_samples, _ = orange.shape
-	yellow_n_samples, _ = yellow.shape
-	lightgreen_n_samples, _ = lightgreen.shape
-	green_n_samples, _ = green.shape
-	lightblue_n_samples, _ = lightblue.shape
-	blue_n_samples, _ = blue.shape
-	purple_n_samples, _ = purple.shape
-	red_n_samples, _ = red.shape
-
-
-	# Generate targets
-	orange_y = np.zeros(oragnge_n_samples)
-	yellow_y = np.ones(yellow_n_samples)
-	lightgreen_y = np.ones(lightgreen_n_samples) * 2
-	green_y = np.ones(green_n_samples) * 3
-	lightblue_y = np.ones(lightblue_n_samples) * 4
-	blue_y = np.ones(blue_n_samples) * 5
-	purple_y = np.ones(purple_n_samples) * 6
-	red_y = np.ones(red_n_samples) * 7
-
-	X = np.vstack((orange, yellow, lightgreen, green, lightblue, blue, purple, red))
-	y = np.hstack((orange_y, yellow_y, lightgreen_y, green_y, lightblue_y, blue_y, purple_y, red_y))
+	X = np.vstack(tuple(color_data))
+	y = np.hstack(tuple(color_targets))
 
 	return (X, y)
 
 def get_material_data():
 
-	wood = np.loadtxt(datapath + 'wood.txt')
-	plastic = np.loadtxt(datapath + 'plastic.txt')
+	material_names = ['wood', 'plastic']
+	material_data = []
+	material_targets = []
 
-	n_samples_wood, _ = wood.shape
-	n_samples_plastic, _ = plastic.shape
+	for i, mat in enumerate(material_names):
+		data = np.loadtxt(datapath + material_names[i] + '.txt')
+		material_data.append(data)
+		n_samples, _ = data.shape
+		material_targets.append(np.zeros(n_samples) + i)
 
-	wood_y = np.zeros(n_samples_wood)
-	plastic_y = np.ones(n_samples_plastic)
+	X = np.vstack(tuple(material_data))
+	y = np.hstack(tuple(material_targets))
 
-	X = np.vstack((wood, plastic))
-	y = np.hstack((wood_y, plastic_y))
+	return (X, y)
+
+def get_shape_data():
+
+	shape_names = ['ball', 'cube']
+	shape_data = []
+	shape_targets = []
+
+	for i, sh in enumerate(shape_names):
+		data = np.loadtxt(datapath + shape_names[i] + '.txt')
+		shape_data.append(data)
+		n_samples, _ = data.shape
+		shape_targets.append(np.zeros(n_samples) + i)
+
+	X = np.vstack(tuple(shape_data))
+	y = np.hstack(tuple(shape_targets))
 
 	return (X, y)
 
 
 # X, y = get_color_data()
-X, y = get_material_data()
+# X, y = get_material_data()
+X, y = get_shape_data()
 
 clf = RandomForestClassifier(n_estimators=100)
-#clf.fit(X, y)
-scores = cross_validation.cross_val_score(clf, X, y)
-print(scores)
+clf.fit(X, y)
+# scores = cross_validation.cross_val_score(clf, X, y)
+# print(scores)
 
-#joblib.dump(clf, datapath + 'color_clf.pkl')
+joblib.dump(clf, datapath + 'shape_clf.pkl')

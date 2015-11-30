@@ -10,6 +10,7 @@ from cv_bridge import CvBridge
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.externals import joblib
+from sklearn import preprocessing
 
 class Classifier:
 	
@@ -20,9 +21,11 @@ class Classifier:
 		self.classifier_path = '/home/fabian/catkin_ws/src/ras_vision/vision_cv/script/data/'
 		self.color_clf = joblib.load(self.classifier_path + 'color_clf/color_clf.pkl')
 		self.material_clf = joblib.load(self.classifier_path + 'material_clf/material_clf.pkl')
+		self.shape_clf = joblib.load(self.classifier_path + 'shape_clf/shape_clf.pkl')
 
 		self.color_names = ['orange', 'yellow', 'lightgreen', 'green', 'lightblue', 'blue', 'purple', 'red']
 		self.material_names = ['wood', 'plastic']
+		self.shape_names = ['ball', 'cube']
 
 		self.color_image = None
 		self.depth_image = None
@@ -44,6 +47,7 @@ class Classifier:
 
 		color = self.classify_color(message.histogram.histogram)
 		material = self.classify_material(message.box, message.centroid)
+		shape = self.classify_shape(message.box)
 
 		#print('color: ' + str(color))
 		#print('material: ' + str(material))
@@ -53,11 +57,17 @@ class Classifier:
 		elif color == 'lightblue' and material == 'plastic':
 			print('blue triangle')
 		elif color == 'yellow' and material == 'wood':
-			print('yellow cube/ball')
+			if shape == 'cube':
+				print('yellow cube')
+			elif shape == 'ball':
+				print('yellow ball')
 		elif color == 'green' and material == 'wood':
 			print('green cube')
 		elif color == 'red' and material == 'wood':
-			print('red cube/ball')
+			if shape == 'cube':
+				print('red cube')
+			elif shape == 'ball':
+				print('red ball')
 		elif color == 'blue' and material == 'wood':
 			print('blue cube')
 		elif color == 'purple' and material == 'plastic':
@@ -85,6 +95,26 @@ class Classifier:
 
 		return self.material_names[int(self.material_clf.predict([nanratio, centroid.z]))] 
 		# return self.material_clf.predict_proba(X)
+
+	def classify_shape(self, box):
+
+		cropped = self.color_image[box.y:box.y + box.size, box.x:box.x + box.size]
+
+		gray = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
+
+		blurred = cv2.GaussianBlur(gray, (5, 5), 1)
+
+		thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+
+		resized = cv2.resize(thresh, (30, 30))
+
+		binarized = preprocessing.binarize(resized)
+
+		flattened = binarized.flatten()
+
+		#print(self.shape_clf.predict(flattened))
+
+		return self.shape_names[int(self.shape_clf.predict(flattened))]
 
 
 
