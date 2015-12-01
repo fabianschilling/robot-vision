@@ -28,7 +28,7 @@
 
 ros::Publisher publisher;
 ros::Publisher pointPublisher;
-ros::Subscriber subscriber;
+ros::Subscriber cloudSubscriber;
 
 const float fx = 574.0;
 const float fy = 574.0;
@@ -202,7 +202,7 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "detector");
     ros::NodeHandle nh;
 
-    subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> >("/camera/depth_registered/points", 1, cloudCallback);
+    cloudSubscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> >("/camera/depth_registered/points", 1, cloudCallback);
     publisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/pointcloud", 1);
     pointPublisher = nh.advertise<geometry_msgs::Point>("/vision/object_rect", 1);
 

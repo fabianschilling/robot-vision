@@ -41,7 +41,7 @@
 #include <Eigen/Geometry>
 
 ros::Publisher publisher;
-ros::Subscriber subscriber;
+ros::Subscriber cloudSubscriber;
 
 static const double P[] = {-0.00324735, -0.88032, -0.474366, 0.290389};
 
@@ -143,7 +143,7 @@ int main (int argc, char** argv) {
   ros::init (argc, argv, "voxel_grid");
   ros::NodeHandle nh;
 
-  subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/camera/depth_registered/points", 1, cloudCallback);
+  cloudSubscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/camera/depth_registered/points", 1, cloudCallback);
 
   publisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/vision/processed", 1);
 

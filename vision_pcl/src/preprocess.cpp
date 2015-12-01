@@ -16,7 +16,7 @@
 #include <pcl/filters/passthrough.h>
 
 ros::Publisher publisher;
-ros::Subscriber subscriber;
+ros::Subscriber cloudSubscriber;
 
 double const leafSize = 0.005;
 double const minZ = 0.0; // 0m
@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
   ros::init(argc, argv, "preprocess");
   ros::NodeHandle nh;
 
-  subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/camera/depth_registered/points", 1, cloudCallback);
+  cloudSubscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/camera/depth_registered/points", 1, cloudCallback);
   publisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/vision/preprocessed", 1);
 
   ros::spin();

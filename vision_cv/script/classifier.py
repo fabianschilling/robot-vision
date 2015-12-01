@@ -8,6 +8,7 @@ import rospkg
 import rospy
 from sensor_msgs.msg import Image
 from vision_msgs.msg import Detection
+from vision_msgs.msg import Object
 from cv_bridge import CvBridge
 
 from sklearn.ensemble import RandomForestClassifier
@@ -32,9 +33,11 @@ class Classifier:
 		self.color_image = None
 		self.depth_image = None
 
+		self.detection_subsriber = rospy.Subscriber('/vision/detection', Detection, self.detection_callback, queue_size=1)
 		self.color_subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.color_callback, queue_size=1)
 		self.depth_subscriber = rospy.Subscriber('/camera/depth/image', Image, self.depth_callback, queue_size=1)
-		self.detection_subsriber = rospy.Subscriber('/vision/detection', Detection, self.detection_callback, queue_size=1)
+
+		self.object_publisher = rospy.Publisher('/vision/object', Object, queue_size=1)
 
 		self.bridge = CvBridge()
 
@@ -48,10 +51,12 @@ class Classifier:
 	def detection_callback(self, message):
 
 		histogram = message.histogram.histogram
+		box = message.box
+		centroid = message.centroid
 
-		color = self.classify_color(message.histogram.histogram)
-		material = self.classify_material(message.box, message.centroid)
-		shape = self.classify_shape(message.box)
+		color = self.classify_color(histogram)
+		material = self.classify_material(box, centroid)
+		shape = self.classify_shape(box)
 
 		#print('color: ' + str(color))
 		#print('material: ' + str(material))
@@ -110,6 +115,9 @@ class Classifier:
 
 		thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
 
+		if thresh is None:
+			return
+			
 		resized = cv2.resize(thresh, (30, 30))
 
 		binarized = preprocessing.binarize(resized)

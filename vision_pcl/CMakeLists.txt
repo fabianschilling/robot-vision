@@ -5,9 +5,12 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_conversions
   pcl_ros
   roscpp
+  rospy
   sensor_msgs
   geometry_msgs
   roslaunch
+  image_transport
+  cv_bridge
 )
 
 catkin_package(
@@ -16,6 +19,8 @@ catkin_package(
 include_directories(
   ${catkin_INCLUDE_DIRS}
 )
+
+find_package(OpenCV REQUIRED)
 
 add_executable(example src/example.cpp)
 target_link_libraries(example ${catkin_LIBRARIES})

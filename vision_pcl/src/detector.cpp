@@ -1,7 +1,11 @@
-// ROS
+// ROS & General
 #include <ros/ros.h>
+#include <vector>
+#include <string>
 
 // Messages
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
@@ -41,16 +45,27 @@
 // Eigen
 #include <Eigen/Geometry>
 
+// OpenCV
+#include <cv_bridge/cv_bridge.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+
 // Global subscriber & publisher variables
+ros::Subscriber cloudSubscriber;
+ros::Subscriber colorSubscriber;
 ros::Publisher publisher;
 ros::Publisher processedPublisher;
 ros::Publisher visualizationPublisher;
 ros::Publisher planePublisher;
 ros::Publisher detectionPublisher;
-ros::Subscriber subscriber;
+
+
+// Global variables
+cv::Mat colorImage;
 
 // These need to be adjusted every time the plane changes
-static const double P[] = {0.0013869, -0.829247, -0.55888, 0.258022};
+static const double P[] = {0.00782723, -0.831883, -0.554896, 0.255878};
 
 // Intrinsic camera parameters
 static const double C[] = {574.0527954101562, 574.0527954101562, 319.5, 239.5};
@@ -242,20 +257,6 @@ Eigen::Matrix4f getTransformation() {
     return transformation;
 }
 
-double getNanRatio(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input) {
-
-    double nanSum = 0.0;
-
-    for(size_t i = 0; i < input->points.size(); i++) {
-        if(isnan(input->points[i].x) || isnan(input->points[i].y) || isnan(input->points[i].z)) {
-            nanSum += 1.0;
-        }
-    }
-
-    return nanSum;
-
-}
-
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr passthroughZ(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr input) {
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr output(new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -440,6 +441,48 @@ vision_msgs::Detection getDetection(Eigen::Vector4f centroid, vision_msgs::Histo
     return detection;
 }
 
+bool isFalsePositive(vision_msgs::Detection detection) {
+
+    // Get the bounding box of the object
+    vision_msgs::Box box = detection.box; 
+    cv::Rect roi = cv::Rect(box.x, box.y, box.size, box.size);
+    cv::Mat m = colorImage;
+
+    // Check if bounding box is correct
+    if (0 > roi.x || 0 > roi.width || roi.x + roi.width > m.cols || 0 > roi.y || 0 > roi.height || roi.y + roi.height > m.rows) {
+        return true;
+    }
+
+    // Crop out the object from the image, if not possible (invalid bbox) return false positive
+
+    cv::Mat objectImage = colorImage(roi);
+
+    // Convert to HSV color space
+    cv::Mat hsvImage;
+    cv::cvtColor(objectImage, hsvImage, cv::COLOR_BGR2HSV);
+
+    // Split H, S and V
+    std::vector<cv::Mat> hsvSplit;
+    cv::split(hsvImage, hsvSplit);
+    cv::Mat saturation = hsvSplit[1];
+
+    double meanSaturation = cv::mean(saturation).val[0];
+
+    // It is a false positive if mean saturation is under 30
+    return (meanSaturation < 30);
+
+    //std::cout << meanSaturation.val[0] << std::endl;
+
+    //cv::imshow("detection", saturation);
+
+    //cv::waitKey(1);
+}
+
+void colorCallback(const sensor_msgs::Image::ConstPtr& message) {
+
+    colorImage = cv_bridge::toCvCopy(message, sensor_msgs::image_encodings::BGR8)->image;
+}
+
 void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud) {
 
     // Filter out everything farther than 1m
@@ -500,6 +543,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
 
             //std::cout << "maxSaturation: " << maxSaturation << std::endl;
 
+            // Check if we have enough saturation to be an object
             if (maxSaturation > minSaturation) {
 
                 detections++; // Increase number of detections
@@ -514,16 +558,15 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
                 pcl::compute3DCentroid(*clusters[i], vizCentroid);
 
                 visualization_msgs::Marker objectMarker = getMarkerForObject(vizCentroid, i);
-                objectMarkers.markers.push_back(objectMarker);
-                //visualizationPublisher.publish(objectMarker);
-
                 vision_msgs::Histogram histogram = computeHistogram(hsvCluster);
                 vision_msgs::Detection detection = getDetection(centroid, histogram);
-                detectionPublisher.publish(detection);
 
-
-                std::cout << "Distance: " << centroid[2] << std::endl;
-
+                // Check if we REALLY have no wall part or anything
+                if (!isFalsePositive(detection)) {
+                    detectionPublisher.publish(detection);
+                    objectMarkers.markers.push_back(objectMarker);
+                    std::cout << "Centroid: (" << centroid[0] << ", " << centroid[1] << ", " << centroid[2] << ")" << std::endl;
+                }
             }
         }
     }
@@ -537,7 +580,8 @@ int main (int argc, char** argv) {
   ros::init (argc, argv, "detector");
   ros::NodeHandle nh;
 
-  subscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/camera/depth_registered/points", 1, cloudCallback);
+  cloudSubscriber = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> > ("/camera/depth_registered/points", 1, cloudCallback);
+  colorSubscriber = nh.subscribe<sensor_msgs::Image>("/camera/rgb/image_raw", 1, colorCallback);
 
   publisher = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("/vision/filtered", 1);
   processedPublisher = nh.advertise<pcl::PointCloud<pcl::PointXYZHSV> >("/vision/processed", 1);
