@@ -2,7 +2,9 @@
 
 import numpy as np
 import cv2
+import os
 
+import rospkg
 import rospy
 from sensor_msgs.msg import Image
 from vision_msgs.msg import Detection
@@ -18,7 +20,7 @@ class Classifier:
 		
 		rospy.init_node('classifier', anonymous=True)
 
-		self.classifier_path = '/home/fabian/catkin_ws/src/ras_vision/vision_cv/script/data/'
+		self.classifier_path = 'catkin_ws/src/ras_vision/vision_cv/script/data/'
 		self.color_clf = joblib.load(self.classifier_path + 'color_clf/color_clf.pkl')
 		self.material_clf = joblib.load(self.classifier_path + 'material_clf/material_clf.pkl')
 		self.shape_clf = joblib.load(self.classifier_path + 'shape_clf/shape_clf.pkl')
@@ -33,7 +35,6 @@ class Classifier:
 		self.color_subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.color_callback, queue_size=1)
 		self.depth_subscriber = rospy.Subscriber('/camera/depth/image', Image, self.depth_callback, queue_size=1)
 		self.detection_subsriber = rospy.Subscriber('/vision/detection', Detection, self.detection_callback, queue_size=1)
-		self.detection_publisher = rospy.Publisher('/vision/object')
 
 		self.bridge = CvBridge()
 
