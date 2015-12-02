@@ -26,9 +26,14 @@ class Classifier:
 		self.material_clf = joblib.load(self.classifier_path + 'material_clf/material_clf.pkl')
 		self.shape_clf = joblib.load(self.classifier_path + 'shape_clf/shape_clf.pkl')
 
-		self.color_names = ['orange', 'yellow', 'lightgreen', 'green', 'lightblue', 'blue', 'purple', 'red']
-		self.material_names = ['wood', 'plastic']
-		self.shape_names = ['ball', 'cube']
+		self.color_names = {-1: 'no color', 0:'orange', 1:'yellow', 2:'lightgreen',3: 'green', 4:'lightblue', 5:'blue', 6:'purple', 7:'red'}
+		self.color_map = {'no color':-1, 'orange': 0, 'yellow':1, 'lightgreen':2, 'green':3, 'lightblue':4, 'blue':5, 'purple':6, 'red':7}
+		self.material_names = {-1: 'no material', 0:'wood', 1:'plastic'}
+		self.material_map = {'no material': -1, 'wood':0, 'plastic':1}
+		self.shape_names = {-1: 'no shape', 0:'ball', 1:'cube'}
+		self.shape_map = {'no shape':-1, 'ball':0, 'cube':1}
+		self.object_names = {-1: 'no object', 0:'patric', 1:'yellow ball', 2:'yellow cube', 3:'green cylinder', 4:'green cube', 5:'blue triangle', 6:'blue cube', 7:'purple cross', 8:'purple star', 9:'red ball', 10:'red cube', 11:'red hollow cube'}
+		self.object_map = {'no object':-1, 'patric':0, 'yellow ball':1, 'yellow cube':2, 'green cylinder':3, 'green cube':4, 'blue triangle':5, 'blue cube':6, 'purple cross':7, 'purple star':8, 'red ball':9, 'red cube':10, 'red hollow cube':11}
 
 		self.color_image = None
 		self.depth_image = None
@@ -48,48 +53,77 @@ class Classifier:
 	def depth_callback(self, message):
 		self.depth_image = np.array(self.bridge.imgmsg_to_cv2(message), dtype=np.float32)
 
+	def send_detection_message(self, centroid, color, material=-1, shape=-1, objecttype=-1, stop=False):
+
+		msg = Object()
+		msg.x = centroid.x
+		msg.y = centroid.y
+		msg.z = centroid.z
+		msg.color = color
+		msg.shape = shape
+		msg.material = material
+		msg.objecttype = objecttype
+		msg.stop = stop
+
+		self.object_publisher.publish(msg)
+
 	def detection_callback(self, message):
 
 		histogram = message.histogram.histogram
 		box = message.box
 		centroid = message.centroid
 
-		color = self.classify_color(histogram)
-		material = self.classify_material(box, centroid)
-		shape = self.classify_shape(box)
+		# If too far away, only classify color
+		if centroid.z > 0.65:
+			color = self.classify_color(histogram)
+			self.send_detection_message(centroid, color)
+			print(self.color_names[color] + ' object. Too far away...')
+		else:
+			color = self.classify_color(histogram)
+			material = self.classify_material(box, centroid)
+			shape = self.classify_shape(box)
+			objecttype = self.classify_object(color, material, shape)
+			print(self.object_names[objecttype])
+			self.send_detection_message(centroid, color, material=material, shape=shape, objecttype=objecttype, stop=True)
 
-		#print('color: ' + str(color))
-		#print('material: ' + str(material))
+	def classify_object(self, color, material, shape):
 
-		if color == 'lightgreen' and material == 'plastic':
-			print('green cylinder')
-		elif color == 'lightblue' and material == 'plastic':
-			print('blue triangle')
-		elif color == 'yellow' and material == 'wood':
-			if shape == 'cube':
-				print('yellow cube')
-			elif shape == 'ball':
-				print('yellow ball')
-		elif color == 'green' and material == 'wood':
-			print('green cube')
-		elif color == 'red' and material == 'wood':
-			if shape == 'cube':
-				print('red cube')
-			elif shape == 'ball':
-				print('red ball')
-		elif color == 'blue' and material == 'wood':
-			print('blue cube')
-		elif color == 'purple' and material == 'plastic':
-			print('purple star/cross')
-		elif color == 'orange' and material == 'plastic':
-			print('patric')
-		elif color == 'red' and material == 'plastic':
-			print('red hollow cube')
-		
-		#print(message.histogram)
+		cm = self.color_map
+		mm = self.material_map
+		sm = self.shape_map
+		om = self.object_map
+
+		if color == cm['lightgreen'] and material == mm['plastic']:
+			return om['green cylinder']
+		elif color == cm['lightblue'] and material == self.material_map['plastic']:
+			return om['blue trianglme']
+		elif color == cm['yellow'] and material == mm['wood']:
+			if shape == sm['cube']:
+				return om['yellow cube']
+			elif shape == sm['ball']:
+				return om['yellow ball']
+		elif color == cm['green'] and material == mm['wood']:
+			return om['green cube']
+		elif color == cm['red'] and material == mm['wood']:
+			if shape == sm['cube']:
+				return om['red cube']
+			elif shape == sm['ball']:
+				return om['red ball']
+		elif color == cm['blue'] and material == mm['wood']:
+			return om['blue cube']
+		elif color == cm['purple'] and material == mm['plastic']:
+			# TODO: ADD CLASSIFIER FOR STAR/CROSS
+			return om['purple cross']
+		elif color == cm['orange'] and material == mm['plastic']:
+			return om['patric']
+		elif color == cm['red'] and material == mm['plastic']:
+			return om['red hollow cube']
+		else:
+			return om['no object']
 
 	def classify_color(self, histogram):
-		return self.color_names[int(self.color_clf.predict(histogram))] 
+		return int(self.color_clf.predict(histogram))
+		# return self.color_names[int(self.color_clf.predict(histogram))] 
 		# return self.color_clf.predict_proba(histogram)
 
 	def classify_material(self, box, centroid):
@@ -102,7 +136,8 @@ class Classifier:
 
 		X = [nanratio, centroid.z]
 
-		return self.material_names[int(self.material_clf.predict([nanratio, centroid.z]))] 
+		return int(self.material_clf.predict([nanratio, centroid.z]))
+		# return self.material_names[int(self.material_clf.predict([nanratio, centroid.z]))] 
 		# return self.material_clf.predict_proba(X)
 
 	def classify_shape(self, box):
@@ -126,7 +161,8 @@ class Classifier:
 
 		#print(self.shape_clf.predict(flattened))
 
-		return self.shape_names[int(self.shape_clf.predict(flattened))]
+		return int(self.shape_clf.predict(flattened))
+		# return self.shape_names[int(self.shape_clf.predict(flattened))]
 
 
 
