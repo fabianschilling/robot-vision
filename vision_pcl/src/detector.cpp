@@ -565,7 +565,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
                 if (!isFalsePositive(detection)) {
                     detectionPublisher.publish(detection);
                     objectMarkers.markers.push_back(objectMarker);
-                    std::cout << "Centroid: (" << centroid[0] << ", " << centroid[1] << ", " << centroid[2] << ")" << std::endl;
+                    std::cout << "Object detected at: (" << centroid[0] << ", " << centroid[1] << ", " << centroid[2] << ")" << std::endl;
                 }
             }
         }

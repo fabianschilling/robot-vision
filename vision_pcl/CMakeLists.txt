@@ -44,7 +44,7 @@ add_executable(ransac_model src/ransac_model.cpp)
 target_link_libraries(ransac_model ${catkin_LIBRARIES})
 
 add_executable(detector src/detector.cpp)
-target_link_libraries(detector ${catkin_LIBRARIES})
+target_link_libraries(detector ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 add_executable(preprocess src/preprocess.cpp)
 target_link_libraries(preprocess ${catkin_LIBRARIES})
