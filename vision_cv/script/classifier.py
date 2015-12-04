@@ -69,22 +69,25 @@ class Classifier:
 
 	def detection_callback(self, message):
 
+		print('detection callback')
+
 		histogram = message.histogram.histogram
 		box = message.box
 		centroid = message.centroid
 
 		# If too far away, only classify color
-		if centroid.z > 0.65:
+		if centroid.z > 0.65 or centroid.z < 0.4:
 			color = self.classify_color(histogram)
 			self.send_detection_message(centroid, color)
-			print(self.color_names[color] + ' object. Too far away...')
+			#print(self.color_names[color] + ' object. Too far away to classify so get closer.')
 		else:
 			color = self.classify_color(histogram)
 			material = self.classify_material(box, centroid)
 			shape = self.classify_shape(box)
 			objecttype = self.classify_object(color, material, shape)
-			print(self.object_names[objecttype])
-			self.send_detection_message(centroid, color, material=material, shape=shape, objecttype=objecttype, stop=True)
+			if objecttype != -1:
+				print(self.object_names[objecttype])
+				self.send_detection_message(centroid, color, material=material, shape=shape, objecttype=objecttype, stop=True)
 
 	def classify_object(self, color, material, shape):
 

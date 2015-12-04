@@ -65,7 +65,7 @@ ros::Publisher detectionPublisher;
 cv::Mat colorImage;
 
 // These need to be adjusted every time the plane changes
-static const double P[] = {0.00782723, -0.831883, -0.554896, 0.255878};
+static const double P[] = {0.00110043, -0.845546, -0.5339, 0.257304};
 
 // Intrinsic camera parameters
 static const double C[] = {574.0527954101562, 574.0527954101562, 319.5, 239.5};
@@ -117,7 +117,7 @@ visualization_msgs::Marker getmarkerForPlane(Eigen::Vector4f minPoint, Eigen::Ve
     marker.color.b = 0.0;
     marker.color.b = 0.0;
 
-    marker.lifetime = ros::Duration(1.0);
+    marker.lifetime = ros::Duration(0.5);
 
     geometry_msgs::Point begin;
     begin.x = rvizMinPoint[0];
@@ -157,7 +157,7 @@ visualization_msgs::Marker getMarkerForObject(Eigen::Vector4f point, int id) {
     marker.color.r = 0.0;
     marker.color.g = 1.0;
     marker.color.b = 0.0;
-    marker.lifetime = ros::Duration(1.0);
+    marker.lifetime = ros::Duration(0.5);
 
     return marker;
 
@@ -316,8 +316,8 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
     segmentation.setOptimizeCoefficients(true);
     segmentation.setModelType(pcl::SACMODEL_PARALLEL_PLANE); // remove planes perpendicular to ground
     segmentation.setMethodType(pcl::SAC_RANSAC);
-    segmentation.setMaxIterations(100);
-    segmentation.setDistanceThreshold(0.005); // 0.005 before
+    segmentation.setMaxIterations(1000);
+    segmentation.setDistanceThreshold(0.005);
     segmentation.setAxis(Eigen::Vector3f(0.0, 1.0, 0.0));
     segmentation.setEpsAngle(pcl::deg2rad(5.0)); // plane angle can be 5 degrees off
     segmentation.setProbability(0.99);
@@ -338,7 +338,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
         segmentation.setInputCloud(input);
         segmentation.segment(*inliers, *coefficients);
 
-        if (inliers->indices.size() == 0 || inliers->indices.size() < planeSize) {
+        if (inliers->indices.empty() || inliers->indices.size() < planeSize) {
             break;
         }
 
@@ -353,11 +353,16 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
          // Get the points associated with the planar surface
         extract.filter(*plane);
 
+        Eigen::Vector4f minXPoint, maxXPoint;
+        pcl::getMinMax3D(*plane, minXPoint, maxXPoint);
+
         // Flatten plane into a line to get rid of height
         flattenPlaneToLine(plane);
 
         Eigen::Vector4f minPoint, maxPoint;
         pcl::getMinMax3D(*plane, minPoint, maxPoint);
+
+        //std::cout << "Plane " << (i + 1) << " height: " << std::abs(minXPoint[1]) << std::endl;
 
         visualization_msgs::Marker planeMarker = getmarkerForPlane(minPoint, maxPoint, coefficients, i);
         planeMarkers.markers.push_back(planeMarker);
@@ -436,7 +441,7 @@ vision_msgs::Detection getDetection(Eigen::Vector4f centroid, vision_msgs::Histo
     detection.box = box;
 
     detection.histogram = histogram;
-    detectionPublisher.publish(detection);
+    //detectionPublisher.publish(detection);
 
     return detection;
 }
@@ -468,8 +473,10 @@ bool isFalsePositive(vision_msgs::Detection detection) {
 
     double meanSaturation = cv::mean(saturation).val[0];
 
+    //std::cout << "Saturation: " << meanSaturation << std::endl;
+
     // It is a false positive if mean saturation is under 30
-    return (meanSaturation < 30);
+    return (meanSaturation < 100);
 
     //std::cout << meanSaturation.val[0] << std::endl;
 

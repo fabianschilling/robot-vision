@@ -1,0 +1,4 @@
+<launch>
+<node pkg="vision_pcl" type="detector" name="detector"/>
+<node pkg="vision_cv" type="classifier.py" name="classifier.py" />
+</launch>
