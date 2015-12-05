@@ -403,13 +403,17 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
     //std::cout << "Publishing " << planeMarkers.markers.size() << " plane markers" << std::endl;
 
     // Get minimum distance to all walls in front
-    std::vector<double>::iterator pos = std::min_element(distances.begin(), distances.end());
+    double minDistance = 1.0;
+    if (!distances.empty()) {
+        std::vector<double>::iterator pos = std::min_element(distances.begin(), distances.end());
+        minDistance = *pos;
+    }
 
     vision_msgs::Wall wall;
-    wall.distance = *pos;
+    wall.distance = minDistance;
     wallPublisher.publish(wall);
 
-    std::cout << "Front wall: " << *pos << std::endl;
+    std::cout << "Front wall: " << minDistance << std::endl;
 
     planePublisher.publish(planeMarkers);
 
