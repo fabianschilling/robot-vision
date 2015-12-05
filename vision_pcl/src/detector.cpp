@@ -10,6 +10,7 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <vision_msgs/Detection.h>
+#include <vision_msgs/Wall.h>
 
 // PCL
 #include <pcl_ros/point_cloud.h>
@@ -50,6 +51,8 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <image_transport/image_transport.h>
+#include <cv_bridge/cv_bridge.h>
 
 // Global subscriber & publisher variables
 ros::Subscriber cloudSubscriber;
@@ -59,13 +62,14 @@ ros::Publisher processedPublisher;
 ros::Publisher visualizationPublisher;
 ros::Publisher planePublisher;
 ros::Publisher detectionPublisher;
-
+ros::Publisher imagePublisher;
+ros::Publisher wallPublisher;
 
 // Global variables
 cv::Mat colorImage;
 
 // These need to be adjusted every time the plane changes
-static const double P[] = {0.00110043, -0.845546, -0.5339, 0.257304};
+static const double P[] = {-0.00122599, -0.834404, -0.551152, 0.253691};
 
 // Intrinsic camera parameters
 static const double C[] = {574.0527954101562, 574.0527954101562, 319.5, 239.5};
@@ -77,7 +81,8 @@ double const minY = -0.30; // 30cm (may want the wall information too!
 //double const minY = -0.15; // 15cm
 double const maxY = -0.01; // 1cm
 
-double const minSaturation = 0.3;
+double const minPCLSaturation = 0.3;
+double const minCVSaturation = 70.0;
 
 
 Eigen::Vector4f pclToRviz(Eigen::Vector4f pclPoint) {
@@ -446,7 +451,7 @@ vision_msgs::Detection getDetection(Eigen::Vector4f centroid, vision_msgs::Histo
     return detection;
 }
 
-bool isFalsePositive(vision_msgs::Detection detection) {
+double getMeanSaturation(vision_msgs::Detection detection) {
 
     // Get the bounding box of the object
     vision_msgs::Box box = detection.box; 
@@ -455,7 +460,7 @@ bool isFalsePositive(vision_msgs::Detection detection) {
 
     // Check if bounding box is correct
     if (0 > roi.x || 0 > roi.width || roi.x + roi.width > m.cols || 0 > roi.y || 0 > roi.height || roi.y + roi.height > m.rows) {
-        return true;
+        return 0.0;
     }
 
     // Crop out the object from the image, if not possible (invalid bbox) return false positive
@@ -475,8 +480,22 @@ bool isFalsePositive(vision_msgs::Detection detection) {
 
     //std::cout << "Saturation: " << meanSaturation << std::endl;
 
+    if (meanSaturation > minCVSaturation) {
+        sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", objectImage).toImageMsg();
+        imagePublisher.publish(msg);
+    }
+
+    return meanSaturation;
+
+    /*if (meanSaturation < 70) {
+        return true; // Is false positive
+    } else {
+
+        return false;
+    }*/
+
     // It is a false positive if mean saturation is under 30
-    return (meanSaturation < 100);
+    //return (meanSaturation < 90);
 
     //std::cout << meanSaturation.val[0] << std::endl;
 
@@ -551,7 +570,7 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
             //std::cout << "maxSaturation: " << maxSaturation << std::endl;
 
             // Check if we have enough saturation to be an object
-            if (maxSaturation > minSaturation) {
+            if (maxSaturation > minPCLSaturation) {
 
                 detections++; // Increase number of detections
 
@@ -568,11 +587,13 @@ void cloudCallback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& inputCloud
                 vision_msgs::Histogram histogram = computeHistogram(hsvCluster);
                 vision_msgs::Detection detection = getDetection(centroid, histogram);
 
+                double meanCVSaturation = getMeanSaturation(detection);
+
                 // Check if we REALLY have no wall part or anything
-                if (!isFalsePositive(detection)) {
+                if (meanCVSaturation > minCVSaturation) {
                     detectionPublisher.publish(detection);
                     objectMarkers.markers.push_back(objectMarker);
-                    std::cout << "Object detected at: (" << centroid[0] << ", " << centroid[1] << ", " << centroid[2] << ")" << std::endl;
+                    std::cout << "Detection: (" << centroid[0] << ", " << centroid[1] << ", " << centroid[2] << ") @ " << int(meanCVSaturation) << std::endl;
                 }
             }
         }
@@ -595,6 +616,8 @@ int main (int argc, char** argv) {
   visualizationPublisher = nh.advertise<visualization_msgs::MarkerArray>("/vision/object_markers", 1);
   planePublisher = nh.advertise<visualization_msgs::MarkerArray>("/vision/plane_markers", 1);
   detectionPublisher = nh.advertise<vision_msgs::Detection>("/vision/detection", 1);
+  imagePublisher = nh.advertise<sensor_msgs::Image>("/vision/detection_image", 1);
+  wallPublisher = nh.advertise<vision_msgs::Wall>("vision/wall", 1);
 
   //ros::spin();
 

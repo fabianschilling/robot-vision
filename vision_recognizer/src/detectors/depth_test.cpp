@@ -67,7 +67,7 @@ int upper = 50;
 int kSize = 3;
 int iterations = 10;
 int thresh = 3;
-int minSaturation = 130;
+int minPCLSaturation = 130;
 int hsvSaturation = 90;
 
 // Test
@@ -277,7 +277,7 @@ int main(int argc, char ** argv) {
     }
 
     cv::namedWindow(WIN_DETECT, cv::WINDOW_NORMAL);
-    cv::createTrackbar("min saturation", WIN_DETECT, &minSaturation, 255);
+    cv::createTrackbar("min saturation", WIN_DETECT, &minPCLSaturation, 255);
 
     depthSubscriber = nh.subscribe<sensor_msgs::Image>("/camera/depth/image", 1, depthCallback);
     colorSubscriber = nh.subscribe<sensor_msgs::Image>("/camera/rgb/image_raw", 1, colorCallback);

@@ -14,6 +14,7 @@ add_message_files(
     Centroid.msg
     Object.msg
     Detection.msg
+    Wall.msg
 )
 
 generate_messages(

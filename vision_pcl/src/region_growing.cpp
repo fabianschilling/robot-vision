@@ -58,7 +58,7 @@ double const minY = -0.30; // 30cm (may want the wall information too!
 //double const minY = -0.15; // 15cm
 double const maxY = -0.01; // 1cm
 
-double const minSaturation = 0.3;
+double const minPCLSaturation = 0.3;
 
 Eigen::Matrix4f getTransformation() {
 
