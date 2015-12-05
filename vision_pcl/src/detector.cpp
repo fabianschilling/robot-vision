@@ -196,6 +196,19 @@ void flattenPlaneToLine(pcl::PointCloud<pcl::PointXYZRGB>::Ptr plane) {
     }
 }
 
+double minDistanceToLine(pcl::PointCloud<pcl::PointXYZRGB>::Ptr line) {
+
+    double minDistance = 1.0;
+    for (size_t i = 0; i < line->points.size(); ++i) {
+        pcl::PointXYZRGB point = line->points[i];
+        if (point.x >= -0.05 && point.x <= 0.05 && point.z < minDistance) {
+            minDistance = point.z;
+        }
+    }
+
+    return minDistance;
+}
+
 Eigen::Vector3f project(Eigen::Vector4f p3d) {
 
     Eigen::Vector3f p2d;
@@ -329,6 +342,8 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
 
     visualization_msgs::MarkerArray planeMarkers;
 
+    std::vector<double> distances;
+
     int planeSize = 400;
     int i = 0;
 
@@ -364,6 +379,10 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
         // Flatten plane into a line to get rid of height
         flattenPlaneToLine(plane);
 
+        double distance = minDistanceToLine(plane);
+
+        distances.push_back(distance);
+
         Eigen::Vector4f minPoint, maxPoint;
         pcl::getMinMax3D(*plane, minPoint, maxPoint);
 
@@ -382,6 +401,15 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr filterPlanes(pcl::PointCloud<pcl::PointXY
     }
 
     //std::cout << "Publishing " << planeMarkers.markers.size() << " plane markers" << std::endl;
+
+    // Get minimum distance to all walls in front
+    std::vector<double>::iterator pos = std::min_element(distances.begin(), distances.end());
+
+    vision_msgs::Wall wall;
+    wall.distance = *pos;
+    wallPublisher.publish(wall);
+
+    std::cout << "Front wall: " << *pos << std::endl;
 
     planePublisher.publish(planeMarkers);
 
