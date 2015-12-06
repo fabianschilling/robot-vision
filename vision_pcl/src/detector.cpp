@@ -462,13 +462,15 @@ std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> extractClusters(pcl::PointCl
 
 vision_msgs::Detection getDetection(Eigen::Vector4f centroid, vision_msgs::Histogram histogram) {
 
-    Eigen::Vector3f p2d = project(centroid);
-
     vision_msgs::Detection detection;
     vision_msgs::Centroid ctr;
-    ctr.x = p2d[0];
-    ctr.y = p2d[1];
-    ctr.z = p2d[2];
+    ctr.x = centroid[0];
+    ctr.y = centroid[1];
+    ctr.z = centroid[2];
+
+    std::cout << ctr << std::endl;
+
+    Eigen::Vector3f p2d = project(centroid);
     detection.centroid = ctr;
     vision_msgs::Box box;
     box.size = int(38.5 / p2d[2]);
