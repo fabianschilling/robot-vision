@@ -21,7 +21,7 @@ class Classifier:
 		
 		rospy.init_node('classifier', anonymous=True)
 
-		self.classifier_path = 'catkin_ws/src/ras_vision/vision_cv/script/data/'
+		self.classifier_path = '/home/fabian/catkin_ws/src/ras_vision/vision_cv/script/data/'
 		self.color_clf = joblib.load(self.classifier_path + 'color_clf/color_clf.pkl')
 		self.material_clf = joblib.load(self.classifier_path + 'material_clf/material_clf.pkl')
 		self.shape_clf = joblib.load(self.classifier_path + 'shape_clf/shape_clf.pkl')
