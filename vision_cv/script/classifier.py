@@ -56,13 +56,11 @@ class Classifier:
 
 	def send_detection_message(self, centroid, color, material=-1, shape=-1, objecttype=-1, stop=False):
 
-		# TODO: add object image here
-
 		msg = Object()
 		msg.x = centroid.x
 		msg.y = centroid.y
 		msg.z = centroid.z
-		msg.image = self.image_evidence
+		msg.image = self.bridge.cv2_to_imgmsg(self.image_evidence, encoding='passthrough')
 		msg.color = color
 		msg.shape = shape
 		msg.material = material
