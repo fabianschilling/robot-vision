@@ -37,6 +37,7 @@ class Classifier:
 
 		self.color_image = None
 		self.depth_image = None
+		self.image_evidence = None
 
 		self.detection_subsriber = rospy.Subscriber('/vision/detection', Detection, self.detection_callback, queue_size=1)
 		self.color_subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.color_callback, queue_size=1)
@@ -55,10 +56,13 @@ class Classifier:
 
 	def send_detection_message(self, centroid, color, material=-1, shape=-1, objecttype=-1, stop=False):
 
+		# TODO: add object image here
+
 		msg = Object()
 		msg.x = centroid.x
 		msg.y = centroid.y
 		msg.z = centroid.z
+		msg.image = self.image_evidence
 		msg.color = color
 		msg.shape = shape
 		msg.material = material
@@ -126,22 +130,18 @@ class Classifier:
 
 	def classify_color(self, histogram):
 		return int(self.color_clf.predict(histogram))
-		# return self.color_names[int(self.color_clf.predict(histogram))] 
-		# return self.color_clf.predict_proba(histogram)
 
 	def classify_material(self, box, centroid):
 
-		cropped = self.depth_image[box.y:box.y + box.size, box.x:box.x + box.size]
+		self.image_evidence = self.depth_image[box.y:box.y + box.size, box.x:box.x + box.size]
 		
-		nans = np.count_nonzero(np.isnan(cropped))
+		nans = np.count_nonzero(np.isnan(self.image_evidence))
 
 		nanratio =  nans / float(box.size * box.size)
 
 		X = [nanratio, centroid.z]
 
 		return int(self.material_clf.predict([nanratio, centroid.z]))
-		# return self.material_names[int(self.material_clf.predict([nanratio, centroid.z]))] 
-		# return self.material_clf.predict_proba(X)
 
 	def classify_shape(self, box):
 
@@ -162,10 +162,7 @@ class Classifier:
 
 		flattened = binarized.flatten()
 
-		#print(self.shape_clf.predict(flattened))
-
 		return int(self.shape_clf.predict(flattened))
-		# return self.shape_names[int(self.shape_clf.predict(flattened))]
 
 
 

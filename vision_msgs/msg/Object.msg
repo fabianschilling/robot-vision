@@ -5,4 +5,5 @@ int32 color
 int32 shape
 int32 material
 int32 objecttype
+sensor_msgs/Image image
 bool stop
