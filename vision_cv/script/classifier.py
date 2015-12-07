@@ -101,7 +101,7 @@ class Classifier:
 		if color == cm['lightgreen'] and material == mm['plastic']:
 			return om['green cylinder']
 		elif color == cm['lightblue'] and material == self.material_map['plastic']:
-			return om['blue trianglme']
+			return om['blue triangle']
 		elif color == cm['yellow'] and material == mm['wood']:
 			if shape == sm['cube']:
 				return om['yellow cube']
