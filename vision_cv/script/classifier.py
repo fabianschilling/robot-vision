@@ -132,36 +132,23 @@ class Classifier:
 	def classify_material(self, box, centroid):
 
 		self.image_evidence = self.depth_image[box.y:box.y + box.size, box.x:box.x + box.size]
-		
 		nans = np.count_nonzero(np.isnan(self.image_evidence))
-
 		nanratio =  nans / float(box.size * box.size)
-
 		X = [nanratio, centroid.z]
-
 		return int(self.material_clf.predict([nanratio, centroid.z]))
 
 	def classify_shape(self, box):
 
 		cropped = self.color_image[box.y:box.y + box.size, box.x:box.x + box.size]
-
 		gray = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
-
 		blurred = cv2.GaussianBlur(gray, (5, 5), 1)
-
 		thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-
 		if thresh is None:
 			return
-			
 		resized = cv2.resize(thresh, (30, 30))
-
 		binarized = preprocessing.binarize(resized)
-
 		flattened = binarized.flatten()
-
 		return int(self.shape_clf.predict(flattened))
-
 
 
 def main():
